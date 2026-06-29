@@ -95,10 +95,8 @@ export default function LeadDetail() {
     updateLead.mutate(
       { id, data: { status: newStatus } },
       {
-        onSuccess: (updatedLead) => {
-          queryClient.setQueryData(getGetLeadQueryKey(id), (old: any) =>
-            old ? { ...old, ...updatedLead } : old
-          );
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetLeadQueryKey(id) });
           queryClient.invalidateQueries({ queryKey: getListLeadsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
           toast({ title: "Status Updated", description: `Lead marked as ${statusConfig[newStatus].label}` });
