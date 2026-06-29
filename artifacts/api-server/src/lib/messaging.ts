@@ -36,10 +36,10 @@ export async function sendEmail(opts: {
   const resend = getResend();
 
   if (!resend) {
-    console.log(`[MOCK EMAIL] To: ${toEmail} | Subject: ${subject} | Body: ${body}`);
+    console.log(`[MOCK EMAIL — no RESEND_API_KEY] To: ${toEmail} | Subject: ${subject} | Body: ${body}`);
     await db
       .update(outboundMessagesTable)
-      .set({ status: "sent", sentAt: new Date() })
+      .set({ status: "failed", errorMessage: "RESEND_API_KEY not configured" })
       .where(eq(outboundMessagesTable.id, messageId));
     return;
   }
@@ -74,10 +74,10 @@ export async function sendSms(opts: {
   const twilioClient = getTwilioClient();
 
   if (!twilioClient) {
-    console.log(`[MOCK SMS] To: ${toPhone} | Body: ${body}`);
+    console.log(`[MOCK SMS — no Twilio credentials] To: ${toPhone} | Body: ${body}`);
     await db
       .update(outboundMessagesTable)
-      .set({ status: "sent", sentAt: new Date() })
+      .set({ status: "failed", errorMessage: "Twilio credentials not configured" })
       .where(eq(outboundMessagesTable.id, messageId));
     return;
   }

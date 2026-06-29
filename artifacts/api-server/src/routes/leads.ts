@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, ilike, or, and, desc, count, sql } from "drizzle-orm";
-import { db, leadsTable, leadEventsTable } from "@workspace/db";
+import { db, leadsTable, leadEventsTable, leadSequencesTable } from "@workspace/db";
 import { createSequenceForLead } from "../lib/scheduler.js";
 import {
   ListLeadsQueryParams,
@@ -172,6 +172,19 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
       type: "status_change",
       note: `Status changed from ${existing.status} to ${status}`,
     });
+
+    // Auto-cancel follow-up sequence when lead is Won or Lost
+    if (status === "won" || status === "lost") {
+      await db
+        .update(leadSequencesTable)
+        .set({ cancelled: true, nextSendAt: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(leadSequencesTable.leadId, lead.id),
+            eq(leadSequencesTable.cancelled, false),
+          ),
+        );
+    }
   }
 
   res.json(UpdateLeadResponse.parse(serializeLead(lead)));

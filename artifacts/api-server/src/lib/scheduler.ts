@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { db, leadSequencesTable, sequenceTemplatesTable, leadsTable, outboundMessagesTable } from "@workspace/db";
-import { eq, and, lte, isNotNull } from "drizzle-orm";
+import { eq, and, lte, isNotNull, notInArray } from "drizzle-orm";
 import { generateMessage } from "./ai-generator.js";
 import { sendEmail, sendSms } from "./messaging.js";
 import { logger } from "./logger.js";
@@ -37,6 +37,7 @@ async function processSequences(): Promise<void> {
         eq(leadSequencesTable.cancelled, false),
         isNotNull(leadSequencesTable.nextSendAt),
         lte(leadSequencesTable.nextSendAt, now),
+        notInArray(leadsTable.status, ["won", "lost"]),
       ),
     );
 
