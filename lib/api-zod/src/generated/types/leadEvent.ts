@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface LeadEvent {
+  id: number;
+  leadId: number;
+  type: string;
+  note?: string | null;
+  createdAt: string;
 }

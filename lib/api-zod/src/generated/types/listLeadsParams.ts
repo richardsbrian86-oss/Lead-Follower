@@ -5,7 +5,9 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { LeadStatus } from './leadStatus';
 
-export interface HealthStatus {
-  status: string;
-}
+export type ListLeadsParams = {
+status?: LeadStatus;
+search?: string;
+};

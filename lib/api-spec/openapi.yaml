@@ -10,6 +10,10 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: leads
+    description: Lead management
+  - name: dashboard
+    description: Dashboard summaries
 paths:
   /healthz:
     get:
@@ -24,6 +28,159 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /leads:
+    get:
+      operationId: listLeads
+      tags: [leads]
+      summary: List all leads
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/LeadStatus"
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of leads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Lead"
+    post:
+      operationId: createLead
+      tags: [leads]
+      summary: Create a new lead
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLeadInput"
+      responses:
+        "201":
+          description: Created lead
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /leads/{id}:
+    get:
+      operationId: getLead
+      tags: [leads]
+      summary: Get a lead by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Lead with events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadWithEvents"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateLead
+      tags: [leads]
+      summary: Update a lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLeadInput"
+      responses:
+        "200":
+          description: Updated lead
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteLead
+      tags: [leads]
+      summary: Delete a lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /leads/{id}/events:
+    post:
+      operationId: createLeadEvent
+      tags: [leads]
+      summary: Add an event/note to a lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLeadEventInput"
+      responses:
+        "201":
+          description: Created event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadEvent"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary stats
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +191,162 @@ components:
       required:
         - status
 
+    LeadStatus:
+      type: string
+      enum: [new, contacted, interested, won, lost]
+
+    Lead:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        visitDate:
+          type: string
+        status:
+          $ref: "#/components/schemas/LeadStatus"
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - name
+        - email
+        - phone
+        - visitDate
+        - status
+        - createdAt
+        - updatedAt
+
+    LeadEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+        leadId:
+          type: integer
+        type:
+          type: string
+        note:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+      required:
+        - id
+        - leadId
+        - type
+        - createdAt
+
+    LeadWithEvents:
+      allOf:
+        - $ref: "#/components/schemas/Lead"
+        - type: object
+          properties:
+            events:
+              type: array
+              items:
+                $ref: "#/components/schemas/LeadEvent"
+          required:
+            - events
+
+    CreateLeadInput:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        visitDate:
+          type: string
+        status:
+          $ref: "#/components/schemas/LeadStatus"
+        notes:
+          type: string
+          nullable: true
+      required:
+        - name
+        - email
+        - phone
+        - visitDate
+
+    UpdateLeadInput:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        visitDate:
+          type: string
+        status:
+          $ref: "#/components/schemas/LeadStatus"
+        notes:
+          type: string
+          nullable: true
+
+    CreateLeadEventInput:
+      type: object
+      properties:
+        type:
+          type: string
+        note:
+          type: string
+          nullable: true
+      required:
+        - type
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    DashboardSummary:
+      type: object
+      properties:
+        totalLeads:
+          type: integer
+        newLeads:
+          type: integer
+        contactedLeads:
+          type: integer
+        interestedLeads:
+          type: integer
+        wonLeads:
+          type: integer
+        lostLeads:
+          type: integer
+        followUpsDueToday:
+          type: integer
+        conversionRate:
+          type: number
+        recentLeads:
+          type: array
+          items:
+            $ref: "#/components/schemas/Lead"
+      required:
+        - totalLeads
+        - newLeads
+        - contactedLeads
+        - interestedLeads
+        - wonLeads
+        - lostLeads
+        - followUpsDueToday
+        - conversionRate
+        - recentLeads
