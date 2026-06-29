@@ -14,6 +14,10 @@ tags:
     description: Lead management
   - name: dashboard
     description: Dashboard summaries
+  - name: messaging
+    description: Lead outbound messaging
+  - name: sequences
+    description: Follow-up sequence management
 paths:
   /healthz:
     get:
@@ -180,6 +184,241 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DashboardSummary"
+
+  /leads/{id}/messages:
+    get:
+      operationId: getLeadMessages
+      tags: [messaging]
+      summary: Get outbound message history for a lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of outbound messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OutboundMessage"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /leads/{id}/messages/draft:
+    post:
+      operationId: draftLeadMessage
+      tags: [messaging]
+      summary: AI-draft a message for a lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DraftMessageInput"
+      responses:
+        "200":
+          description: Drafted message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageDraft"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /leads/{id}/messages/send:
+    post:
+      operationId: sendLeadMessage
+      tags: [messaging]
+      summary: Send a message to a lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageInput"
+      responses:
+        "201":
+          description: Sent message record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutboundMessage"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /leads/{id}/sequence:
+    get:
+      operationId: getLeadSequence
+      tags: [sequences]
+      summary: Get the follow-up sequence state for a lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Sequence state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadSequence"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /leads/{id}/sequence/pause:
+    post:
+      operationId: pauseLeadSequence
+      tags: [sequences]
+      summary: Pause the follow-up sequence for a lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated sequence
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadSequence"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /leads/{id}/sequence/resume:
+    post:
+      operationId: resumeLeadSequence
+      tags: [sequences]
+      summary: Resume the follow-up sequence for a lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated sequence
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadSequence"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /leads/{id}/sequence/cancel:
+    post:
+      operationId: cancelLeadSequence
+      tags: [sequences]
+      summary: Cancel the follow-up sequence for a lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated sequence
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadSequence"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /sequences/templates:
+    get:
+      operationId: listSequenceTemplates
+      tags: [sequences]
+      summary: List all sequence step templates
+      responses:
+        "200":
+          description: All templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SequenceTemplate"
+
+  /sequences/templates/{step}:
+    put:
+      operationId: updateSequenceTemplate
+      tags: [sequences]
+      summary: Update a sequence step template
+      parameters:
+        - name: step
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSequenceTemplateInput"
+      responses:
+        "200":
+          description: Updated template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SequenceTemplate"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
 components:
   schemas:
@@ -350,3 +589,145 @@ components:
         - followUpsDueToday
         - conversionRate
         - recentLeads
+
+    OutboundMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        leadId:
+          type: integer
+        channel:
+          type: string
+          enum: [email, sms]
+        subject:
+          type: string
+          nullable: true
+        body:
+          type: string
+        status:
+          type: string
+          enum: [sent, failed, pending]
+        errorMessage:
+          type: string
+          nullable: true
+        sentAt:
+          type: string
+          nullable: true
+        sequenceStep:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+      required:
+        - id
+        - leadId
+        - channel
+        - body
+        - status
+        - createdAt
+
+    DraftMessageInput:
+      type: object
+      properties:
+        channel:
+          type: string
+          enum: [email, sms]
+        stepHint:
+          type: integer
+          nullable: true
+      required:
+        - channel
+
+    MessageDraft:
+      type: object
+      properties:
+        subject:
+          type: string
+          nullable: true
+        body:
+          type: string
+        channel:
+          type: string
+          enum: [email, sms]
+      required:
+        - body
+        - channel
+
+    SendMessageInput:
+      type: object
+      properties:
+        channel:
+          type: string
+          enum: [email, sms]
+        subject:
+          type: string
+          nullable: true
+        body:
+          type: string
+        sequenceStep:
+          type: integer
+          nullable: true
+      required:
+        - channel
+        - body
+
+    LeadSequence:
+      type: object
+      properties:
+        id:
+          type: integer
+        leadId:
+          type: integer
+        currentStep:
+          type: integer
+        paused:
+          type: boolean
+        cancelled:
+          type: boolean
+        nextSendAt:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - leadId
+        - currentStep
+        - paused
+        - cancelled
+        - createdAt
+        - updatedAt
+
+    SequenceTemplate:
+      type: object
+      properties:
+        id:
+          type: integer
+        step:
+          type: integer
+        delayDays:
+          type: integer
+        toneInstruction:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - step
+        - delayDays
+        - toneInstruction
+        - createdAt
+        - updatedAt
+
+    UpdateSequenceTemplateInput:
+      type: object
+      properties:
+        delayDays:
+          type: integer
+        toneInstruction:
+          type: string

@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Users, Plus, Menu } from "lucide-react";
+import { Activity, Users, Plus, Menu, CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
@@ -14,6 +14,7 @@ export function Layout({ children }: LayoutProps) {
   const navItems = [
     { href: "/", label: "Dashboard", icon: Activity },
     { href: "/leads", label: "Leads Pipeline", icon: Users },
+    { href: "/sequences", label: "Sequences", icon: CalendarClock },
   ];
 
   const SidebarContent = () => (

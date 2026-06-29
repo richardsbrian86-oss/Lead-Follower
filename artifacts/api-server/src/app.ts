@@ -3,6 +3,8 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { startScheduler } from "./lib/scheduler";
+import { seedSequenceTemplates } from "./lib/seed-templates";
 
 const app: Express = express();
 
@@ -30,5 +32,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
+
+// Seed default sequence templates and start cron scheduler
+seedSequenceTemplates().then(() => startScheduler()).catch((err) => {
+  logger.error({ err }, "Failed to start scheduler");
+});
 
 export default app;

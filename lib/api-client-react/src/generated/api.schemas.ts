@@ -83,6 +83,103 @@ export interface DashboardSummary {
   recentLeads: Lead[];
 }
 
+export type OutboundMessageChannel = typeof OutboundMessageChannel[keyof typeof OutboundMessageChannel];
+
+
+export const OutboundMessageChannel = {
+  email: 'email',
+  sms: 'sms',
+} as const;
+
+export type OutboundMessageStatus = typeof OutboundMessageStatus[keyof typeof OutboundMessageStatus];
+
+
+export const OutboundMessageStatus = {
+  sent: 'sent',
+  failed: 'failed',
+  pending: 'pending',
+} as const;
+
+export interface OutboundMessage {
+  id: number;
+  leadId: number;
+  channel: OutboundMessageChannel;
+  subject?: string | null;
+  body: string;
+  status: OutboundMessageStatus;
+  errorMessage?: string | null;
+  sentAt?: string | null;
+  sequenceStep?: number | null;
+  createdAt: string;
+}
+
+export type DraftMessageInputChannel = typeof DraftMessageInputChannel[keyof typeof DraftMessageInputChannel];
+
+
+export const DraftMessageInputChannel = {
+  email: 'email',
+  sms: 'sms',
+} as const;
+
+export interface DraftMessageInput {
+  channel: DraftMessageInputChannel;
+  stepHint?: number | null;
+}
+
+export type MessageDraftChannel = typeof MessageDraftChannel[keyof typeof MessageDraftChannel];
+
+
+export const MessageDraftChannel = {
+  email: 'email',
+  sms: 'sms',
+} as const;
+
+export interface MessageDraft {
+  subject?: string | null;
+  body: string;
+  channel: MessageDraftChannel;
+}
+
+export type SendMessageInputChannel = typeof SendMessageInputChannel[keyof typeof SendMessageInputChannel];
+
+
+export const SendMessageInputChannel = {
+  email: 'email',
+  sms: 'sms',
+} as const;
+
+export interface SendMessageInput {
+  channel: SendMessageInputChannel;
+  subject?: string | null;
+  body: string;
+  sequenceStep?: number | null;
+}
+
+export interface LeadSequence {
+  id: number;
+  leadId: number;
+  currentStep: number;
+  paused: boolean;
+  cancelled: boolean;
+  nextSendAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SequenceTemplate {
+  id: number;
+  step: number;
+  delayDays: number;
+  toneInstruction: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateSequenceTemplateInput {
+  delayDays?: number;
+  toneInstruction?: string;
+}
+
 export type ListLeadsParams = {
 status?: LeadStatus;
 search?: string;

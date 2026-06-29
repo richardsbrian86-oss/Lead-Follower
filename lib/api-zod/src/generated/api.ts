@@ -178,3 +178,184 @@ export const GetDashboardSummaryResponse = zod.object({
 })
 
 
+/**
+ * @summary Get outbound message history for a lead
+ */
+export const GetLeadMessagesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetLeadMessagesResponseItem = zod.object({
+  "id": zod.number(),
+  "leadId": zod.number(),
+  "channel": zod.enum(['email', 'sms']),
+  "subject": zod.string().nullish(),
+  "body": zod.string(),
+  "status": zod.enum(['sent', 'failed', 'pending']),
+  "errorMessage": zod.string().nullish(),
+  "sentAt": zod.string().nullish(),
+  "sequenceStep": zod.number().nullish(),
+  "createdAt": zod.string()
+})
+export const GetLeadMessagesResponse = zod.array(GetLeadMessagesResponseItem)
+
+
+/**
+ * @summary AI-draft a message for a lead
+ */
+export const DraftLeadMessageParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DraftLeadMessageBody = zod.object({
+  "channel": zod.enum(['email', 'sms']),
+  "stepHint": zod.number().nullish()
+})
+
+export const DraftLeadMessageResponse = zod.object({
+  "subject": zod.string().nullish(),
+  "body": zod.string(),
+  "channel": zod.enum(['email', 'sms'])
+})
+
+
+/**
+ * @summary Send a message to a lead
+ */
+export const SendLeadMessageParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SendLeadMessageBody = zod.object({
+  "channel": zod.enum(['email', 'sms']),
+  "subject": zod.string().nullish(),
+  "body": zod.string(),
+  "sequenceStep": zod.number().nullish()
+})
+
+export const SendLeadMessageResponse = zod.object({
+  "id": zod.number(),
+  "leadId": zod.number(),
+  "channel": zod.enum(['email', 'sms']),
+  "subject": zod.string().nullish(),
+  "body": zod.string(),
+  "status": zod.enum(['sent', 'failed', 'pending']),
+  "errorMessage": zod.string().nullish(),
+  "sentAt": zod.string().nullish(),
+  "sequenceStep": zod.number().nullish(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Get the follow-up sequence state for a lead
+ */
+export const GetLeadSequenceParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetLeadSequenceResponse = zod.object({
+  "id": zod.number(),
+  "leadId": zod.number(),
+  "currentStep": zod.number(),
+  "paused": zod.boolean(),
+  "cancelled": zod.boolean(),
+  "nextSendAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Pause the follow-up sequence for a lead
+ */
+export const PauseLeadSequenceParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const PauseLeadSequenceResponse = zod.object({
+  "id": zod.number(),
+  "leadId": zod.number(),
+  "currentStep": zod.number(),
+  "paused": zod.boolean(),
+  "cancelled": zod.boolean(),
+  "nextSendAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Resume the follow-up sequence for a lead
+ */
+export const ResumeLeadSequenceParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ResumeLeadSequenceResponse = zod.object({
+  "id": zod.number(),
+  "leadId": zod.number(),
+  "currentStep": zod.number(),
+  "paused": zod.boolean(),
+  "cancelled": zod.boolean(),
+  "nextSendAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Cancel the follow-up sequence for a lead
+ */
+export const CancelLeadSequenceParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CancelLeadSequenceResponse = zod.object({
+  "id": zod.number(),
+  "leadId": zod.number(),
+  "currentStep": zod.number(),
+  "paused": zod.boolean(),
+  "cancelled": zod.boolean(),
+  "nextSendAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary List all sequence step templates
+ */
+export const ListSequenceTemplatesResponseItem = zod.object({
+  "id": zod.number(),
+  "step": zod.number(),
+  "delayDays": zod.number(),
+  "toneInstruction": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListSequenceTemplatesResponse = zod.array(ListSequenceTemplatesResponseItem)
+
+
+/**
+ * @summary Update a sequence step template
+ */
+export const UpdateSequenceTemplateParams = zod.object({
+  "step": zod.coerce.number()
+})
+
+export const UpdateSequenceTemplateBody = zod.object({
+  "delayDays": zod.number().optional(),
+  "toneInstruction": zod.string().optional()
+})
+
+export const UpdateSequenceTemplateResponse = zod.object({
+  "id": zod.number(),
+  "step": zod.number(),
+  "delayDays": zod.number(),
+  "toneInstruction": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+

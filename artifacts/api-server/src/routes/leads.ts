@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, ilike, or, and, desc, count, sql } from "drizzle-orm";
 import { db, leadsTable, leadEventsTable } from "@workspace/db";
+import { createSequenceForLead } from "../lib/scheduler.js";
 import {
   ListLeadsQueryParams,
   ListLeadsResponse,
@@ -87,6 +88,11 @@ router.post("/leads", async (req, res): Promise<void> => {
     leadId: lead.id,
     type: "created",
     note: "Lead added to system",
+  });
+
+  // Start automated follow-up sequence
+  await createSequenceForLead(lead.id, lead.visitDate).catch((err) => {
+    console.error("Failed to create sequence for lead", lead.id, err);
   });
 
   res.status(201).json(CreateLeadResponse.parse(serializeLead(lead)));
