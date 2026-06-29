@@ -17,9 +17,27 @@ import {
   CreateLeadEventResponse,
   GetDashboardSummaryResponse,
 } from "@workspace/api-zod";
-import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
+
+type DbLead = typeof leadsTable.$inferSelect;
+type DbEvent = typeof leadEventsTable.$inferSelect;
+
+function serializeLead(lead: DbLead) {
+  return {
+    ...lead,
+    visitDate: lead.visitDate instanceof Date ? lead.visitDate.toISOString() : lead.visitDate,
+    createdAt: lead.createdAt instanceof Date ? lead.createdAt.toISOString() : lead.createdAt,
+    updatedAt: lead.updatedAt instanceof Date ? lead.updatedAt.toISOString() : lead.updatedAt,
+  };
+}
+
+function serializeEvent(event: DbEvent) {
+  return {
+    ...event,
+    createdAt: event.createdAt instanceof Date ? event.createdAt.toISOString() : event.createdAt,
+  };
+}
 
 router.get("/leads", async (req, res): Promise<void> => {
   const query = ListLeadsQueryParams.safeParse(req.query);
@@ -49,7 +67,7 @@ router.get("/leads", async (req, res): Promise<void> => {
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(leadsTable.createdAt));
 
-  res.json(ListLeadsResponse.parse(leads));
+  res.json(ListLeadsResponse.parse(leads.map(serializeLead)));
 });
 
 router.post("/leads", async (req, res): Promise<void> => {
@@ -71,7 +89,7 @@ router.post("/leads", async (req, res): Promise<void> => {
     note: "Lead added to system",
   });
 
-  res.status(201).json(CreateLeadResponse.parse(lead));
+  res.status(201).json(CreateLeadResponse.parse(serializeLead(lead)));
 });
 
 router.get("/leads/:id", async (req, res): Promise<void> => {
@@ -97,7 +115,7 @@ router.get("/leads/:id", async (req, res): Promise<void> => {
     .where(eq(leadEventsTable.leadId, lead.id))
     .orderBy(desc(leadEventsTable.createdAt));
 
-  res.json(GetLeadResponse.parse({ ...lead, events }));
+  res.json(GetLeadResponse.parse({ ...serializeLead(lead), events: events.map(serializeEvent) }));
 });
 
 router.patch("/leads/:id", async (req, res): Promise<void> => {
@@ -150,7 +168,7 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     });
   }
 
-  res.json(UpdateLeadResponse.parse(lead));
+  res.json(UpdateLeadResponse.parse(serializeLead(lead)));
 });
 
 router.delete("/leads/:id", async (req, res): Promise<void> => {
@@ -201,7 +219,7 @@ router.post("/leads/:id/events", async (req, res): Promise<void> => {
     .values({ leadId: params.data.id, ...parsed.data })
     .returning();
 
-  res.status(201).json(CreateLeadEventResponse.parse(event));
+  res.status(201).json(CreateLeadEventResponse.parse(serializeEvent(event)));
 });
 
 router.get("/dashboard/summary", async (_req, res): Promise<void> => {
@@ -230,9 +248,7 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
       ? Math.round((counts.won / totalLeads) * 100 * 10) / 10
       : 0;
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const followUpThreshold = new Date(today);
+  const followUpThreshold = new Date();
   followUpThreshold.setDate(followUpThreshold.getDate() - 3);
 
   const [followUpsResult] = await db
@@ -260,7 +276,7 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
     lostLeads: counts.lost,
     followUpsDueToday: followUpsResult?.count ?? 0,
     conversionRate,
-    recentLeads,
+    recentLeads: recentLeads.map(serializeLead),
   };
 
   res.json(GetDashboardSummaryResponse.parse(summary));
