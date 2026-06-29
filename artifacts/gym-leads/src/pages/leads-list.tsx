@@ -67,7 +67,7 @@ export default function LeadsList() {
           <div className="w-full sm:w-48">
             <Select
               value={statusFilter}
-              onValueChange={(val) => setStatusFilter(val as any)}
+              onValueChange={(val) => setStatusFilter(val as LeadStatus | "all")}
             >
               <SelectTrigger className="bg-background">
                 <Filter className="w-4 h-4 mr-2 text-muted-foreground" />

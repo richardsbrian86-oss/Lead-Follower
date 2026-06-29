@@ -9,6 +9,7 @@ import {
   getListLeadsQueryKey,
   getGetDashboardSummaryQueryKey,
   LeadStatus,
+  LeadWithEvents,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -135,7 +136,7 @@ export default function LeadDetail() {
         onSuccess: (newEvent) => {
           setNoteText("");
           // Optimistically update the events list
-          queryClient.setQueryData(getGetLeadQueryKey(id), (old: any) => {
+          queryClient.setQueryData(getGetLeadQueryKey(id), (old: LeadWithEvents | undefined) => {
             if (!old) return old;
             return {
               ...old,

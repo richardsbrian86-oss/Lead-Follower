@@ -46,7 +46,7 @@ export default function Dashboard() {
 
   const statCards = [
     { title: "Total Pipeline", value: summary.totalLeads ?? 0, icon: Users, color: "text-blue-500" },
-    { title: "Follow-ups Due", value: summary.followUpsDueToday ?? 0, icon: CalendarClock, color: "text-amber-500" },
+    { title: "Overdue Follow-ups", value: summary.followUpsDueToday ?? 0, icon: CalendarClock, color: "text-amber-500" },
     { title: "Conversion Rate", value: `${(summary.conversionRate ?? 0).toFixed(1)}%`, icon: Target, color: "text-emerald-500" },
     { title: "New This Month", value: summary.newLeads ?? 0, icon: TrendingUp, color: "text-purple-500" },
   ];

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -28,7 +28,7 @@ export const leadsTable = pgTable("leads", {
 
 export const leadEventsTable = pgTable("lead_events", {
   id: serial("id").primaryKey(),
-  leadId: serial("lead_id")
+  leadId: integer("lead_id")
     .notNull()
     .references(() => leadsTable.id, { onDelete: "cascade" }),
   type: text("type").notNull(),
