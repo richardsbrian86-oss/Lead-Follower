@@ -9,7 +9,14 @@ import LeadsList from "@/pages/leads-list";
 import LeadNew from "@/pages/lead-new";
 import LeadDetail from "@/pages/lead-detail";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 10_000,
+    },
+  },
+});
 
 function Router() {
   return (
