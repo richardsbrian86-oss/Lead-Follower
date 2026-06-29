@@ -3,6 +3,7 @@ import { eq, ilike, or, and, desc, count, sql, notInArray } from "drizzle-orm";
 import { db, leadsTable, leadEventsTable, leadSequencesTable } from "@workspace/db";
 import { createSequenceForLead } from "../lib/scheduler.js";
 import { recomputeAndSaveScore, computeScore } from "../lib/scorer.js";
+import { logger } from "../lib/logger.js";
 import {
   ListLeadsQueryParams,
   ListLeadsResponse,
@@ -99,7 +100,9 @@ router.post("/leads", async (req, res): Promise<void> => {
   });
 
   // Compute initial score
-  await recomputeAndSaveScore(lead.id).catch(() => {});
+  await recomputeAndSaveScore(lead.id).catch((err) =>
+    logger.error({ err, leadId: lead.id }, "Failed to compute initial score for new lead"),
+  );
 
   res.status(201).json(CreateLeadResponse.parse(serializeLead(lead)));
 });
@@ -194,7 +197,9 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
   }
 
   // Recompute score after any update
-  await recomputeAndSaveScore(lead.id).catch(() => {});
+  await recomputeAndSaveScore(lead.id).catch((err) =>
+    logger.error({ err, leadId: lead.id }, "Failed to recompute score after lead update"),
+  );
   const [updatedLead] = await db.select().from(leadsTable).where(eq(leadsTable.id, lead.id));
 
   res.json(UpdateLeadResponse.parse(serializeLead(updatedLead ?? lead)));
@@ -249,7 +254,9 @@ router.post("/leads/:id/events", async (req, res): Promise<void> => {
     .returning();
 
   // Recompute score after new activity
-  await recomputeAndSaveScore(params.data.id).catch(() => {});
+  await recomputeAndSaveScore(params.data.id).catch((err) =>
+    logger.error({ err, leadId: params.data.id }, "Failed to recompute score after event creation"),
+  );
 
   res.status(201).json(CreateLeadEventResponse.parse(serializeEvent(event)));
 });

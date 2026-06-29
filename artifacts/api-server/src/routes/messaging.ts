@@ -14,6 +14,7 @@ import {
 import { generateMessage } from "../lib/ai-generator.js";
 import { sendEmail, sendSms } from "../lib/messaging.js";
 import { recomputeAndSaveScore } from "../lib/scorer.js";
+import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
 
@@ -135,7 +136,9 @@ router.post("/leads/:id/messages/send", async (req, res): Promise<void> => {
     .where(eq(outboundMessagesTable.id, msg.id));
 
   // Recompute score after message sent (affects outreach engagement factor)
-  await recomputeAndSaveScore(lead.id).catch(() => {});
+  await recomputeAndSaveScore(lead.id).catch((err) =>
+    logger.error({ err, leadId: lead.id }, "Failed to recompute score after message send"),
+  );
 
   res.status(201).json(SendLeadMessageResponse.parse(serializeMessage(updated)));
 });

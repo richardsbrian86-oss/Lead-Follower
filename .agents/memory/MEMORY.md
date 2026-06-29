@@ -1,2 +1,3 @@
 - [OpenAI proxy model + JSON parsing](openai-proxy.md) — Replit AI proxy uses gpt-4o-mini, not gpt-5-mini; response_format json_object unsupported; must strip markdown fences from response.
 - [Twilio lazy init](twilio-lazy-init.md) — Twilio client must be created lazily (inside function) not at module top-level; throws on invalid SID even with env check.
+- [Lead Scoring — outreach factor](lead-scoring-outreach-factor.md) — sequence messages only (sequenceStep IS NOT NULL), denominator = sent+failed (not pending), not all outbound messages

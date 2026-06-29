@@ -1,5 +1,6 @@
 import { db, leadsTable, leadEventsTable, outboundMessagesTable, leadSequencesTable } from "@workspace/db";
-import { eq, count, and } from "drizzle-orm";
+import { eq, count, and, isNotNull, notInArray, inArray } from "drizzle-orm";
+import { logger } from "./logger.js";
 
 export interface ScoreFactors {
   visitRecency: number;
@@ -24,13 +25,15 @@ const STATUS_POINTS: Record<string, number> = {
 
 export async function computeScore(leadId: number): Promise<ScoreResult> {
   const [lead] = await db.select().from(leadsTable).where(eq(leadsTable.id, leadId));
-  if (!lead) return { score: 0, factors: { visitRecency: 0, status: 0, activity: 0, outreachEngagement: 0, sequenceProgress: 0 } };
+  if (!lead) {
+    return { score: 0, factors: { visitRecency: 0, status: 0, activity: 0, outreachEngagement: 0, sequenceProgress: 0 } };
+  }
 
   const now = new Date();
   const visitDate = new Date(lead.visitDate);
   const daysSinceVisit = Math.max(0, (now.getTime() - visitDate.getTime()) / (1000 * 60 * 60 * 24));
 
-  // Visit recency: 30 pts max, linear decay from 3d (full) to 30d (0)
+  // Visit recency: 30 pts max, full score within 3 days, linear decay to 0 at 30 days
   const visitRecency = daysSinceVisit <= 3
     ? 30
     : daysSinceVisit >= 30
@@ -41,28 +44,46 @@ export async function computeScore(leadId: number): Promise<ScoreResult> {
   const status = STATUS_POINTS[lead.status] ?? 0;
 
   // Activity: 5 pts per note/event, capped at 20
-  const [eventCount] = await db
+  const [eventRow] = await db
     .select({ count: count() })
     .from(leadEventsTable)
     .where(eq(leadEventsTable.leadId, leadId));
-  const activity = Math.min(20, (eventCount?.count ?? 0) * 5);
+  const activity = Math.min(20, (eventRow?.count ?? 0) * 5);
 
-  // Outreach engagement: proportion of sent (non-failed) messages × 15 pts
-  const [totalMsgs] = await db
+  // Outreach engagement: sequence messages only (sequenceStep IS NOT NULL).
+  // Denominator = sent + failed (resolved messages; pending are excluded as unresolved).
+  // Numerator = sent. Score = sent / (sent + failed) × 15.
+  const [sentSeqRow] = await db
     .select({ count: count() })
     .from(outboundMessagesTable)
-    .where(eq(outboundMessagesTable.leadId, leadId));
-  const [sentMsgs] = await db
+    .where(
+      and(
+        eq(outboundMessagesTable.leadId, leadId),
+        isNotNull(outboundMessagesTable.sequenceStep),
+        eq(outboundMessagesTable.status, "sent"),
+      ),
+    );
+  const [failedSeqRow] = await db
     .select({ count: count() })
     .from(outboundMessagesTable)
-    .where(and(eq(outboundMessagesTable.leadId, leadId), eq(outboundMessagesTable.status, "sent")));
-  const total = totalMsgs?.count ?? 0;
-  const sent = sentMsgs?.count ?? 0;
-  const outreachEngagement = total > 0 ? Math.round((sent / total) * 15) : 0;
+    .where(
+      and(
+        eq(outboundMessagesTable.leadId, leadId),
+        isNotNull(outboundMessagesTable.sequenceStep),
+        eq(outboundMessagesTable.status, "failed"),
+      ),
+    );
+  const sentSeq = sentSeqRow?.count ?? 0;
+  const failedSeq = failedSeqRow?.count ?? 0;
+  const resolvedSeq = sentSeq + failedSeq;
+  const outreachEngagement = resolvedSeq > 0 ? Math.round((sentSeq / resolvedSeq) * 15) : 0;
 
-  // Sequence progress: 2.5 pts per completed step
-  const [seq] = await db.select().from(leadSequencesTable).where(eq(leadSequencesTable.leadId, leadId));
-  const sequenceProgress = seq ? Math.min(10, seq.currentStep * 2.5) : 0;
+  // Sequence progress: 2.5 pts per completed step, capped at 10
+  const [seq] = await db
+    .select()
+    .from(leadSequencesTable)
+    .where(eq(leadSequencesTable.leadId, leadId));
+  const sequenceProgress = seq ? Math.min(10, Math.round(seq.currentStep * 2.5)) : 0;
 
   const score = Math.min(100, Math.round(visitRecency + status + activity + outreachEngagement + sequenceProgress));
 
@@ -80,27 +101,31 @@ export async function recomputeAndSaveScore(leadId: number): Promise<void> {
     .where(eq(leadsTable.id, leadId));
 }
 
+const BATCH_SIZE = 50;
+
 export async function recomputeAllActiveScores(): Promise<void> {
+  // Fetch all active lead IDs (not won/lost) in one query — no per-status cap
   const activeLeads = await db
     .select({ id: leadsTable.id })
     .from(leadsTable)
-    .where(eq(leadsTable.status, "new"))
-    .limit(200);
+    .where(notInArray(leadsTable.status, ["won", "lost"]));
 
-  const otherLeads = await db
-    .select({ id: leadsTable.id })
-    .from(leadsTable)
-    .where(eq(leadsTable.status, "contacted"))
-    .limit(200);
+  if (activeLeads.length === 0) return;
 
-  const interestedLeads = await db
-    .select({ id: leadsTable.id })
-    .from(leadsTable)
-    .where(eq(leadsTable.status, "interested"))
-    .limit(200);
+  const ids = activeLeads.map((r) => r.id);
+  logger.info({ count: ids.length }, "Recomputing scores for active leads");
 
-  const allIds = [...activeLeads, ...otherLeads, ...interestedLeads].map(r => r.id);
-  const unique = [...new Set(allIds)];
+  // Process in batches of BATCH_SIZE to avoid overwhelming the DB
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    const batch = ids.slice(i, i + BATCH_SIZE);
+    await Promise.all(
+      batch.map((id) =>
+        recomputeAndSaveScore(id).catch((err) =>
+          logger.error({ err, leadId: id }, "Failed to recompute score for lead"),
+        ),
+      ),
+    );
+  }
 
-  await Promise.all(unique.map(id => recomputeAndSaveScore(id).catch(() => {})));
+  logger.info({ count: ids.length }, "Score recompute complete");
 }
