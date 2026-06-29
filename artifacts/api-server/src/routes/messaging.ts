@@ -13,6 +13,7 @@ import {
 } from "@workspace/api-zod";
 import { generateMessage } from "../lib/ai-generator.js";
 import { sendEmail, sendSms } from "../lib/messaging.js";
+import { recomputeAndSaveScore } from "../lib/scorer.js";
 
 const router: IRouter = Router();
 
@@ -132,6 +133,9 @@ router.post("/leads/:id/messages/send", async (req, res): Promise<void> => {
     .select()
     .from(outboundMessagesTable)
     .where(eq(outboundMessagesTable.id, msg.id));
+
+  // Recompute score after message sent (affects outreach engagement factor)
+  await recomputeAndSaveScore(lead.id).catch(() => {});
 
   res.status(201).json(SendLeadMessageResponse.parse(serializeMessage(updated)));
 });

@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { useListLeads, getListLeadsQueryKey, LeadStatus } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { Search, Filter, Phone, Mail, Clock, Eye } from "lucide-react";
+import { Search, Filter, Phone, Mail, Clock, Eye, ArrowUpDown } from "lucide-react";
+import { ScoreBadge } from "@/components/score-badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,21 +26,30 @@ import { StatusBadge, statusConfig } from "@/components/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/hooks/use-debounce";
 
+type SortDir = "asc" | "desc";
+
 export default function LeadsList() {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
   const [statusFilter, setStatusFilter] = useState<LeadStatus | "all">("all");
+  const [scoreSort, setScoreSort] = useState<SortDir>("desc");
 
   const queryParams = {
     ...(debouncedSearch ? { search: debouncedSearch } : {}),
     ...(statusFilter !== "all" ? { status: statusFilter } : {}),
   };
 
-  const { data: leads, isLoading } = useListLeads(queryParams, {
+  const { data: rawLeads, isLoading } = useListLeads(queryParams, {
     query: {
       queryKey: getListLeadsQueryKey(queryParams)
     }
   });
+
+  const leads = rawLeads
+    ? [...rawLeads].sort((a, b) =>
+        scoreSort === "desc" ? (b.score ?? 0) - (a.score ?? 0) : (a.score ?? 0) - (b.score ?? 0)
+      )
+    : rawLeads;
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -92,6 +102,15 @@ export default function LeadsList() {
                 <TableHead className="font-semibold text-foreground">Contact Info</TableHead>
                 <TableHead className="font-semibold text-foreground">Visit Date</TableHead>
                 <TableHead className="font-semibold text-foreground">Status</TableHead>
+                <TableHead className="font-semibold text-foreground">
+                  <button
+                    onClick={() => setScoreSort(s => s === "desc" ? "asc" : "desc")}
+                    className="flex items-center gap-1 hover:text-primary transition-colors"
+                  >
+                    Score
+                    <ArrowUpDown className="w-3.5 h-3.5" />
+                  </button>
+                </TableHead>
                 <TableHead className="text-right font-semibold text-foreground">Action</TableHead>
               </TableRow>
             </TableHeader>
@@ -103,12 +122,13 @@ export default function LeadsList() {
                     <TableCell><Skeleton className="h-5 w-48" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-6 w-24 rounded-full" /></TableCell>
+                    <TableCell><Skeleton className="h-6 w-10 rounded-md" /></TableCell>
                     <TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
                   </TableRow>
                 ))
               ) : leads?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
                     No leads found matching your criteria.
                   </TableCell>
                 </TableRow>
@@ -136,6 +156,9 @@ export default function LeadsList() {
                     </TableCell>
                     <TableCell>
                       <StatusBadge status={lead.status} />
+                    </TableCell>
+                    <TableCell>
+                      <ScoreBadge score={lead.score ?? 0} size="sm" />
                     </TableCell>
                     <TableCell className="text-right">
                       <Button asChild variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">

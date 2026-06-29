@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { LeadStatus } from './leadStatus';
+import type { ScoreFactors } from './scoreFactors';
 
 export interface Lead {
   id: number;
@@ -15,6 +16,8 @@ export interface Lead {
   visitDate: string;
   status: LeadStatus;
   notes?: string | null;
+  score: number;
+  scoreFactors?: ScoreFactors | null;
   createdAt: string;
   updatedAt: string;
 }

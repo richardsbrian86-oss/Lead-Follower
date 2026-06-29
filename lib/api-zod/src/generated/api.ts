@@ -33,6 +33,14 @@ export const ListLeadsResponseItem = zod.object({
   "visitDate": zod.string(),
   "status": zod.enum(['new', 'contacted', 'interested', 'won', 'lost']),
   "notes": zod.string().nullish(),
+  "score": zod.number(),
+  "scoreFactors": zod.object({
+  "visitRecency": zod.number(),
+  "status": zod.number(),
+  "activity": zod.number(),
+  "outreachEngagement": zod.number(),
+  "sequenceProgress": zod.number()
+}).nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -59,6 +67,14 @@ export const CreateLeadResponse = zod.object({
   "visitDate": zod.string(),
   "status": zod.enum(['new', 'contacted', 'interested', 'won', 'lost']),
   "notes": zod.string().nullish(),
+  "score": zod.number(),
+  "scoreFactors": zod.object({
+  "visitRecency": zod.number(),
+  "status": zod.number(),
+  "activity": zod.number(),
+  "outreachEngagement": zod.number(),
+  "sequenceProgress": zod.number()
+}).nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -79,6 +95,14 @@ export const GetLeadResponse = zod.object({
   "visitDate": zod.string(),
   "status": zod.enum(['new', 'contacted', 'interested', 'won', 'lost']),
   "notes": zod.string().nullish(),
+  "score": zod.number(),
+  "scoreFactors": zod.object({
+  "visitRecency": zod.number(),
+  "status": zod.number(),
+  "activity": zod.number(),
+  "outreachEngagement": zod.number(),
+  "sequenceProgress": zod.number()
+}).nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 }).and(zod.object({
@@ -116,6 +140,14 @@ export const UpdateLeadResponse = zod.object({
   "visitDate": zod.string(),
   "status": zod.enum(['new', 'contacted', 'interested', 'won', 'lost']),
   "notes": zod.string().nullish(),
+  "score": zod.number(),
+  "scoreFactors": zod.object({
+  "visitRecency": zod.number(),
+  "status": zod.number(),
+  "activity": zod.number(),
+  "outreachEngagement": zod.number(),
+  "sequenceProgress": zod.number()
+}).nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -172,9 +204,55 @@ export const GetDashboardSummaryResponse = zod.object({
   "visitDate": zod.string(),
   "status": zod.enum(['new', 'contacted', 'interested', 'won', 'lost']),
   "notes": zod.string().nullish(),
+  "score": zod.number(),
+  "scoreFactors": zod.object({
+  "visitRecency": zod.number(),
+  "status": zod.number(),
+  "activity": zod.number(),
+  "outreachEngagement": zod.number(),
+  "sequenceProgress": zod.number()
+}).nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})),
+  "hotLeads": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "visitDate": zod.string(),
+  "status": zod.enum(['new', 'contacted', 'interested', 'won', 'lost']),
+  "notes": zod.string().nullish(),
+  "score": zod.number(),
+  "scoreFactors": zod.object({
+  "visitRecency": zod.number(),
+  "status": zod.number(),
+  "activity": zod.number(),
+  "outreachEngagement": zod.number(),
+  "sequenceProgress": zod.number()
+}).nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 }))
+})
+
+
+/**
+ * @summary Get predictive score for a lead
+ */
+export const GetLeadScoreParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetLeadScoreResponse = zod.object({
+  "score": zod.number(),
+  "factors": zod.object({
+  "visitRecency": zod.number(),
+  "status": zod.number(),
+  "activity": zod.number(),
+  "outreachEngagement": zod.number(),
+  "sequenceProgress": zod.number()
+})
 })
 
 

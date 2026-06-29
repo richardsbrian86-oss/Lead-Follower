@@ -185,6 +185,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/DashboardSummary"
 
+  /leads/{id}/score:
+    get:
+      operationId: getLeadScore
+      tags: [leads]
+      summary: Get predictive score for a lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Lead score and factor breakdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadScore"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /leads/{id}/messages:
     get:
       operationId: getLeadMessages
@@ -434,6 +459,37 @@ components:
       type: string
       enum: [new, contacted, interested, won, lost]
 
+    ScoreFactors:
+      type: object
+      properties:
+        visitRecency:
+          type: number
+        status:
+          type: number
+        activity:
+          type: number
+        outreachEngagement:
+          type: number
+        sequenceProgress:
+          type: number
+      required:
+        - visitRecency
+        - status
+        - activity
+        - outreachEngagement
+        - sequenceProgress
+
+    LeadScore:
+      type: object
+      properties:
+        score:
+          type: integer
+        factors:
+          $ref: "#/components/schemas/ScoreFactors"
+      required:
+        - score
+        - factors
+
     Lead:
       type: object
       properties:
@@ -452,6 +508,11 @@ components:
         notes:
           type: string
           nullable: true
+        score:
+          type: integer
+        scoreFactors:
+          $ref: "#/components/schemas/ScoreFactors"
+          nullable: true
         createdAt:
           type: string
         updatedAt:
@@ -463,6 +524,7 @@ components:
         - phone
         - visitDate
         - status
+        - score
         - createdAt
         - updatedAt
 
@@ -579,6 +641,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Lead"
+        hotLeads:
+          type: array
+          items:
+            $ref: "#/components/schemas/Lead"
       required:
         - totalLeads
         - newLeads
@@ -589,6 +655,7 @@ components:
         - followUpsDueToday
         - conversionRate
         - recentLeads
+        - hotLeads
 
     OutboundMessage:
       type: object

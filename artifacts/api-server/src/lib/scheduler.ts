@@ -3,6 +3,7 @@ import { db, leadSequencesTable, sequenceTemplatesTable, leadsTable, outboundMes
 import { eq, and, lte, isNotNull, notInArray } from "drizzle-orm";
 import { generateMessage } from "./ai-generator.js";
 import { sendEmail, sendSms } from "./messaging.js";
+import { recomputeAllActiveScores } from "./scorer.js";
 import { logger } from "./logger.js";
 
 const MAX_STEPS = 4;
@@ -12,11 +13,13 @@ export function startScheduler(): void {
   cron.schedule("0 * * * *", async () => {
     logger.info("Sequence scheduler tick");
     await processSequences();
+    await recomputeAllActiveScores().catch((err) => logger.error({ err }, "Score recompute failed"));
   });
 
   // Also run once at startup after a short delay (5s)
   setTimeout(async () => {
     logger.info("Sequence scheduler startup run");
+    await recomputeAllActiveScores().catch((err) => logger.error({ err }, "Startup score recompute failed"));
     await processSequences();
   }, 5000);
 }

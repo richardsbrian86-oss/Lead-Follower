@@ -28,6 +28,7 @@ import type {
   HealthStatus,
   Lead,
   LeadEvent,
+  LeadScore,
   LeadSequence,
   LeadWithEvents,
   ListLeadsParams,
@@ -652,6 +653,83 @@ export function useGetDashboardSummary<TData = Awaited<ReturnType<typeof getDash
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDashboardSummaryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetLeadScoreUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/score`
+}
+
+/**
+ * @summary Get predictive score for a lead
+ */
+export const getLeadScore = async (id: number, options?: RequestInit): Promise<LeadScore> => {
+
+  return customFetch<LeadScore>(getGetLeadScoreUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLeadScoreQueryKey = (id: number,) => {
+    return [
+    `/api/leads/${id}/score`
+    ] as const;
+    }
+
+
+export const getGetLeadScoreQueryOptions = <TData = Awaited<ReturnType<typeof getLeadScore>>, TError = ErrorType<ErrorResponse>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLeadScore>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLeadScoreQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLeadScore>>> = ({ signal }) => getLeadScore(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLeadScore>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLeadScoreQueryResult = NonNullable<Awaited<ReturnType<typeof getLeadScore>>>
+export type GetLeadScoreQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get predictive score for a lead
+ */
+
+export function useGetLeadScore<TData = Awaited<ReturnType<typeof getLeadScore>>, TError = ErrorType<ErrorResponse>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLeadScore>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLeadScoreQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

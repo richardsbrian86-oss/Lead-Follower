@@ -54,6 +54,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SendMessageModal } from "@/components/send-message-modal";
 import { MessageHistory } from "@/components/message-history";
 import { SequenceControls } from "@/components/sequence-controls";
+import { ScoreBreakdown } from "@/components/score-breakdown";
 
 export default function LeadDetail() {
   const [, params] = useRoute("/leads/:id");
@@ -304,6 +305,8 @@ export default function LeadDetail() {
           )}
 
           <SequenceControls leadId={id} />
+
+          <ScoreBreakdown leadId={id} />
         </div>
 
         <div className="col-span-1 lg:col-span-2 space-y-6">

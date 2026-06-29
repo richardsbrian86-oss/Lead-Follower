@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { eq, ilike, or, and, desc, count, sql } from "drizzle-orm";
+import { eq, ilike, or, and, desc, count, sql, notInArray } from "drizzle-orm";
 import { db, leadsTable, leadEventsTable, leadSequencesTable } from "@workspace/db";
 import { createSequenceForLead } from "../lib/scheduler.js";
+import { recomputeAndSaveScore, computeScore } from "../lib/scorer.js";
 import {
   ListLeadsQueryParams,
   ListLeadsResponse,
@@ -17,6 +18,8 @@ import {
   CreateLeadEventBody,
   CreateLeadEventResponse,
   GetDashboardSummaryResponse,
+  GetLeadScoreParams,
+  GetLeadScoreResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -94,6 +97,9 @@ router.post("/leads", async (req, res): Promise<void> => {
   await createSequenceForLead(lead.id, lead.visitDate).catch((err) => {
     console.error("Failed to create sequence for lead", lead.id, err);
   });
+
+  // Compute initial score
+  await recomputeAndSaveScore(lead.id).catch(() => {});
 
   res.status(201).json(CreateLeadResponse.parse(serializeLead(lead)));
 });
@@ -187,7 +193,11 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     }
   }
 
-  res.json(UpdateLeadResponse.parse(serializeLead(lead)));
+  // Recompute score after any update
+  await recomputeAndSaveScore(lead.id).catch(() => {});
+  const [updatedLead] = await db.select().from(leadsTable).where(eq(leadsTable.id, lead.id));
+
+  res.json(UpdateLeadResponse.parse(serializeLead(updatedLead ?? lead)));
 });
 
 router.delete("/leads/:id", async (req, res): Promise<void> => {
@@ -238,7 +248,27 @@ router.post("/leads/:id/events", async (req, res): Promise<void> => {
     .values({ leadId: params.data.id, ...parsed.data })
     .returning();
 
+  // Recompute score after new activity
+  await recomputeAndSaveScore(params.data.id).catch(() => {});
+
   res.status(201).json(CreateLeadEventResponse.parse(serializeEvent(event)));
+});
+
+router.get("/leads/:id/score", async (req, res): Promise<void> => {
+  const params = GetLeadScoreParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [lead] = await db.select().from(leadsTable).where(eq(leadsTable.id, params.data.id));
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
+  const result = await computeScore(params.data.id);
+  res.json(GetLeadScoreResponse.parse({ score: result.score, factors: result.factors }));
 });
 
 router.get("/dashboard/summary", async (_req, res): Promise<void> => {
@@ -286,6 +316,13 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
     .orderBy(desc(leadsTable.createdAt))
     .limit(5);
 
+  const hotLeads = await db
+    .select()
+    .from(leadsTable)
+    .where(notInArray(leadsTable.status, ["won", "lost"]))
+    .orderBy(desc(leadsTable.score))
+    .limit(5);
+
   const summary = {
     totalLeads,
     newLeads: counts.new,
@@ -296,6 +333,7 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
     followUpsDueToday: followUpsResult?.count ?? 0,
     conversionRate,
     recentLeads: recentLeads.map(serializeLead),
+    hotLeads: hotLeads.map(serializeLead),
   };
 
   res.json(GetDashboardSummaryResponse.parse(summary));

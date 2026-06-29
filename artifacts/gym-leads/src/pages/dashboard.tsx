@@ -1,11 +1,12 @@
 import React from "react";
 import { useGetDashboardSummary, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, TrendingUp, CalendarClock, Target, Phone, ThumbsUp } from "lucide-react";
+import { Users, TrendingUp, CalendarClock, Target, Phone, ThumbsUp, Flame } from "lucide-react";
 import { Link } from "wouter";
 import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
+import { ScoreBadge } from "@/components/score-badge";
 
 export default function Dashboard() {
   const { data: summary, isLoading, isError } = useGetDashboardSummary({
@@ -82,8 +83,8 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="col-span-1 lg:col-span-2">
-          <Card className="h-full border-none shadow-md">
+        <div className="col-span-1 lg:col-span-2 space-y-8">
+          <Card className="border-none shadow-md">
             <CardHeader>
               <CardTitle className="text-xl">Recent Activity</CardTitle>
             </CardHeader>
@@ -105,6 +106,40 @@ export default function Dashboard() {
               ) : (
                 <div className="text-center p-8 border border-dashed rounded-lg bg-muted/50">
                   <p className="text-muted-foreground">No recent leads found.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-md">
+            <CardHeader className="flex flex-row items-center justify-between pb-3 bg-secondary/30 border-b">
+              <CardTitle className="text-xl flex items-center gap-2">
+                <Flame className="w-5 h-5 text-orange-500" />
+                Hot Leads
+              </CardTitle>
+              <span className="text-xs text-muted-foreground">Top 5 by score, active only</span>
+            </CardHeader>
+            <CardContent className="pt-4">
+              {(summary.hotLeads ?? []).length > 0 ? (
+                <div className="space-y-3">
+                  {(summary.hotLeads ?? []).map((lead) => (
+                    <Link key={lead.id} href={`/leads/${lead.id}`}>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/20 hover:bg-secondary/50 transition-colors cursor-pointer group">
+                        <div className="flex items-center gap-3">
+                          <ScoreBadge score={lead.score ?? 0} size="md" />
+                          <div>
+                            <p className="font-semibold text-sm group-hover:text-primary transition-colors">{lead.name}</p>
+                            <p className="text-xs text-muted-foreground">Visited {format(new Date(lead.visitDate), "MMM d")}</p>
+                          </div>
+                        </div>
+                        <StatusBadge status={lead.status} />
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center p-6 border border-dashed rounded-lg bg-muted/50">
+                  <p className="text-muted-foreground text-sm">No active leads yet.</p>
                 </div>
               )}
             </CardContent>

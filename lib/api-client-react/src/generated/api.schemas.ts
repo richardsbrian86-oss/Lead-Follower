@@ -20,6 +20,19 @@ export const LeadStatus = {
   lost: 'lost',
 } as const;
 
+export interface ScoreFactors {
+  visitRecency: number;
+  status: number;
+  activity: number;
+  outreachEngagement: number;
+  sequenceProgress: number;
+}
+
+export interface LeadScore {
+  score: number;
+  factors: ScoreFactors;
+}
+
 export interface Lead {
   id: number;
   name: string;
@@ -28,6 +41,8 @@ export interface Lead {
   visitDate: string;
   status: LeadStatus;
   notes?: string | null;
+  score: number;
+  scoreFactors?: ScoreFactors | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -81,6 +96,7 @@ export interface DashboardSummary {
   followUpsDueToday: number;
   conversionRate: number;
   recentLeads: Lead[];
+  hotLeads: Lead[];
 }
 
 export type OutboundMessageChannel = typeof OutboundMessageChannel[keyof typeof OutboundMessageChannel];

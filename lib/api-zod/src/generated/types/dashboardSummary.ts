@@ -17,4 +17,5 @@ export interface DashboardSummary {
   followUpsDueToday: number;
   conversionRate: number;
   recentLeads: Lead[];
+  hotLeads: Lead[];
 }

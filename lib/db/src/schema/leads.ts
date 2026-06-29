@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, pgEnum, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -18,6 +18,8 @@ export const leadsTable = pgTable("leads", {
   visitDate: timestamp("visit_date", { withTimezone: true }).notNull(),
   status: leadStatusEnum("status").notNull().default("new"),
   notes: text("notes"),
+  score: integer("score").notNull().default(0),
+  scoreFactors: jsonb("score_factors"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
