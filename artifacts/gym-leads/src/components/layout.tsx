@@ -19,12 +19,12 @@ export function Layout({ children }: LayoutProps) {
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-sidebar border-r border-sidebar-border">
-      <div className="p-5 pb-4">
+      <div className="px-4 pt-5 pb-4">
         <Link href="/" className="flex items-center">
           <img
             src="/flow-state-logo.png"
             alt="Flow State"
-            className="h-10 w-auto object-contain border-t-[5px] border-b-[5px] border-l-[5px] pr-[50px] border-r-[5px]"
+            className="w-full h-auto object-contain object-left"
           />
         </Link>
       </div>
