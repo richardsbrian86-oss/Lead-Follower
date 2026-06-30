@@ -53,10 +53,10 @@ export default function Dashboard() {
   ];
 
   const breakdownCards = [
-    { label: "New", count: summary.newLeads, icon: Users, bg: "bg-blue-50 text-blue-600" },
-    { label: "Contacted", count: summary.contactedLeads, icon: Phone, bg: "bg-amber-50 text-amber-600" },
-    { label: "Interested", count: summary.interestedLeads, icon: ThumbsUp, bg: "bg-purple-50 text-purple-600" },
-    { label: "Won", count: summary.wonLeads, icon: Target, bg: "bg-emerald-50 text-emerald-600" },
+    { label: "New", count: summary.newLeads, icon: Users, bg: "bg-sky-500/20 text-sky-300" },
+    { label: "Contacted", count: summary.contactedLeads, icon: Phone, bg: "bg-amber-500/20 text-amber-300" },
+    { label: "Interested", count: summary.interestedLeads, icon: ThumbsUp, bg: "bg-violet-500/20 text-violet-300" },
+    { label: "Won", count: summary.wonLeads, icon: Target, bg: "bg-emerald-500/20 text-emerald-300" },
   ];
 
   return (

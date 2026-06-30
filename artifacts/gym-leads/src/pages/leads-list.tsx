@@ -94,8 +94,8 @@ export default function LeadsList() {
             </Select>
           </div>
         </div>
-        <CardContent className="p-0">
-          <Table>
+        <CardContent className="p-0 overflow-x-auto">
+          <Table className="min-w-[640px]">
             <TableHeader className="bg-muted/30">
               <TableRow>
                 <TableHead className="font-semibold text-foreground">Name</TableHead>

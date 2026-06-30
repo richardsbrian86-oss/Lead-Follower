@@ -62,51 +62,52 @@
 }
 
 :root {
-  --button-outline: rgba(0,0,0, .10);
-  --badge-outline: rgba(0,0,0, .05);
-  --opaque-button-border-intensity: -8;
-  --elevate-1: rgba(0,0,0, .03);
-  --elevate-2: rgba(0,0,0, .08);
+  /* Flow State dark theme — navy + electric cyan */
+  --button-outline: rgba(255,255,255, .10);
+  --badge-outline: rgba(255,255,255, .05);
+  --opaque-button-border-intensity: 9;
+  --elevate-1: rgba(255,255,255, .03);
+  --elevate-2: rgba(255,255,255, .07);
 
-  /* Bold, crisp light mode */
-  --background: 0 0% 98%;
-  --foreground: 240 10% 10%;
-  
-  --border: 240 5% 84%;
-  --input: 240 5% 84%;
-  --ring: 221 100% 50%;
-  
-  --card: 0 0% 100%;
-  --card-foreground: 240 10% 10%;
-  --card-border: 240 5% 90%;
-  
-  --sidebar: 0 0% 100%;
-  --sidebar-foreground: 240 10% 15%;
-  --sidebar-border: 240 5% 90%;
-  --sidebar-primary: 221 100% 50%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 240 5% 96%;
-  --sidebar-accent-foreground: 240 10% 10%;
-  --sidebar-ring: 221 100% 50%;
-  
-  --popover: 0 0% 100%;
-  --popover-foreground: 240 10% 10%;
-  --popover-border: 240 5% 84%;
-  
-  /* Primary: Electric Blue */
-  --primary: 221 100% 50%;
-  --primary-foreground: 0 0% 100%;
-  
-  --secondary: 240 5% 92%;
-  --secondary-foreground: 240 10% 15%;
-  
-  --muted: 240 5% 92%;
-  --muted-foreground: 240 5% 45%;
-  
-  --accent: 240 5% 92%;
-  --accent-foreground: 240 10% 10%;
-  
-  --destructive: 350 80% 50%;
+  /* Backgrounds */
+  --background: 210 57% 11%;        /* #0d1b2a — main navy */
+  --foreground: 210 40% 92%;        /* #dce8f5 — near-white */
+
+  --border: 210 40% 20%;            /* #1e3448 — subtle border */
+  --input: 210 40% 18%;
+  --ring: 193 100% 47%;             /* cyan focus ring */
+
+  --card: 210 50% 15%;              /* #152236 — card surface */
+  --card-foreground: 210 40% 92%;
+  --card-border: 210 40% 20%;
+
+  --sidebar: 210 60% 8%;            /* #091420 — darkest sidebar */
+  --sidebar-foreground: 210 30% 85%;
+  --sidebar-border: 210 40% 16%;
+  --sidebar-primary: 193 100% 47%;  /* cyan */
+  --sidebar-primary-foreground: 210 60% 6%;
+  --sidebar-accent: 210 50% 16%;
+  --sidebar-accent-foreground: 210 30% 90%;
+  --sidebar-ring: 193 100% 47%;
+
+  --popover: 210 55% 13%;
+  --popover-foreground: 210 40% 92%;
+  --popover-border: 210 40% 20%;
+
+  /* Primary: Electric Cyan */
+  --primary: 193 100% 47%;          /* #00c8f0 */
+  --primary-foreground: 210 60% 6%;
+
+  --secondary: 210 45% 18%;
+  --secondary-foreground: 210 30% 85%;
+
+  --muted: 210 47% 14%;
+  --muted-foreground: 210 25% 60%;  /* slate-ish */
+
+  --accent: 210 45% 18%;
+  --accent-foreground: 210 30% 90%;
+
+  --destructive: 350 80% 55%;
   --destructive-foreground: 0 0% 100%;
 
   --app-font-sans: 'Bricolage Grotesque', sans-serif;
@@ -121,53 +122,6 @@
   --muted-border: hsl(from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
   --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
-}
-
-.dark {
-  --button-outline: rgba(255,255,255, .10);
-  --badge-outline: rgba(255,255,255, .05);
-  --opaque-button-border-intensity: 9;
-  --elevate-1: rgba(255,255,255, .04);
-  --elevate-2: rgba(255,255,255, .09);
-
-  --background: 240 10% 5%;
-  --foreground: 0 0% 98%;
-  
-  --border: 240 5% 15%;
-  --input: 240 5% 15%;
-  --ring: 221 100% 60%;
-  
-  --card: 240 10% 8%;
-  --card-foreground: 0 0% 98%;
-  --card-border: 240 5% 15%;
-  
-  --sidebar: 240 10% 8%;
-  --sidebar-foreground: 0 0% 98%;
-  --sidebar-border: 240 5% 15%;
-  --sidebar-primary: 221 100% 60%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 240 5% 15%;
-  --sidebar-accent-foreground: 0 0% 98%;
-  --sidebar-ring: 221 100% 60%;
-  
-  --popover: 240 10% 8%;
-  --popover-foreground: 0 0% 98%;
-  --popover-border: 240 5% 15%;
-  
-  --primary: 221 100% 60%;
-  --primary-foreground: 0 0% 100%;
-  
-  --secondary: 240 5% 15%;
-  --secondary-foreground: 0 0% 98%;
-  
-  --muted: 240 5% 15%;
-  --muted-foreground: 240 5% 65%;
-  
-  --accent: 240 5% 15%;
-  --accent-foreground: 0 0% 98%;
-  
-  --destructive: 350 80% 60%;
-  --destructive-foreground: 0 0% 100%;
 }
 
 @layer base {
