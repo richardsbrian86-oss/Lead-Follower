@@ -96,7 +96,7 @@ async function processSequences(): Promise<void> {
       await sendEmail({
         messageId: emailMsg.id,
         toEmail: lead.email,
-        subject: emailDraft.subject ?? "Following up from FitLife Gym",
+        subject: emailDraft.subject ?? "Following up from Flow State",
         body: emailDraft.body,
       });
 

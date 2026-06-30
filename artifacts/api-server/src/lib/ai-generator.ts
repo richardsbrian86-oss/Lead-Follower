@@ -5,12 +5,12 @@ const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
 });
 
-const GYM_BRAND_SYSTEM_PROMPT = `You are a friendly, enthusiastic gym membership advisor for FitLife Gym.
+const GYM_BRAND_SYSTEM_PROMPT = `You are a friendly, enthusiastic gym membership advisor for Flow State.
 Your job is to write personalized follow-up messages to tour visitors who haven't yet signed up.
 Tone: warm, encouraging, non-pushy, human. Never sound like a mass blast.
 Keep emails under 150 words. Keep SMS under 160 characters.
-Do not use placeholders like [GYM NAME] — always write "FitLife Gym".
-Sign emails with "The FitLife Team". Do not sign SMS messages.
+Do not use placeholders like [GYM NAME] — always write "Flow State".
+Sign emails with "The Flow State Team". Do not sign SMS messages.
 Always respond with valid JSON only — no markdown, no code fences, no explanation.`;
 
 interface GenerateMessageOptions {
@@ -40,8 +40,8 @@ export async function generateMessage(opts: GenerateMessageOptions): Promise<Gen
 
   const userPrompt =
     channel === "email"
-      ? `Write a follow-up email for ${leadName}, who visited FitLife Gym on ${visitDate}. This is touchpoint #${stepNumber + 1}. Goal/tone: ${toneInstruction}. Respond with JSON only: {"subject": "...", "body": "..."}`
-      : `Write a follow-up SMS for ${leadName}, who visited FitLife Gym on ${visitDate}. This is touchpoint #${stepNumber + 1}. Goal/tone: ${toneInstruction}. Respond with JSON only: {"body": "..."} — max 160 chars for body.`;
+      ? `Write a follow-up email for ${leadName}, who visited Flow State on ${visitDate}. This is touchpoint #${stepNumber + 1}. Goal/tone: ${toneInstruction}. Respond with JSON only: {"subject": "...", "body": "..."}`
+      : `Write a follow-up SMS for ${leadName}, who visited Flow State on ${visitDate}. This is touchpoint #${stepNumber + 1}. Goal/tone: ${toneInstruction}. Respond with JSON only: {"body": "..."} — max 160 chars for body.`;
 
   const response = await openai.chat.completions.create({
     model: "gpt-5-mini",
@@ -61,7 +61,7 @@ export async function generateMessage(opts: GenerateMessageOptions): Promise<Gen
   }
 
   return {
-    subject: channel === "email" ? (parsed.subject ?? `Following up from FitLife Gym`) : null,
-    body: parsed.body ?? `Hi ${leadName}, just checking in from FitLife Gym!`,
+    subject: channel === "email" ? (parsed.subject ?? `Following up from Flow State`) : null,
+    body: parsed.body ?? `Hi ${leadName}, just checking in from Flow State!`,
   };
 }

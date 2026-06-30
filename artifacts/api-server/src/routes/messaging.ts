@@ -119,7 +119,7 @@ router.post("/leads/:id/messages/send", async (req, res): Promise<void> => {
     await sendEmail({
       messageId: msg.id,
       toEmail: lead.email,
-      subject: body.data.subject ?? "Following up from FitLife Gym",
+      subject: body.data.subject ?? "Following up from Flow State",
       body: body.data.body,
     });
   } else {

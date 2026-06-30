@@ -3,7 +3,7 @@ import twilio from "twilio";
 import { db, outboundMessagesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
-const FROM_EMAIL = "FitLife Gym <onboarding@resend.dev>";
+const FROM_EMAIL = "Flow State <onboarding@resend.dev>";
 const FROM_PHONE = process.env.TWILIO_PHONE_NUMBER ?? "";
 
 function getResend(): Resend | null {
