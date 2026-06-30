@@ -44,7 +44,7 @@ export async function generateMessage(opts: GenerateMessageOptions): Promise<Gen
       : `Write a follow-up SMS for ${leadName}, who visited FitLife Gym on ${visitDate}. This is touchpoint #${stepNumber + 1}. Goal/tone: ${toneInstruction}. Respond with JSON only: {"body": "..."} — max 160 chars for body.`;
 
   const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-5-mini",
     max_completion_tokens: 512,
     messages: [
       { role: "system", content: GYM_BRAND_SYSTEM_PROMPT },
