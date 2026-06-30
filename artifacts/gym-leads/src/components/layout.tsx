@@ -24,7 +24,7 @@ export function Layout({ children }: LayoutProps) {
           <img
             src="/flow-state-logo.png"
             alt="Flow State"
-            className="h-10 w-auto object-contain border-t-[5px] border-r-[50px] border-b-[5px] border-l-[5px]"
+            className="h-10 w-auto object-contain border-t-[5px] border-b-[5px] border-l-[5px] pr-[50px] border-r-[5px]"
           />
         </Link>
       </div>
