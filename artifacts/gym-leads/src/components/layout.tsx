@@ -1,8 +1,9 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
-import { Users, Plus, Menu, CalendarClock, LayoutDashboard, BarChart2 } from "lucide-react";
+import { Users, Plus, Menu, CalendarClock, LayoutDashboard, BarChart2, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { useAuth } from "@workspace/replit-auth-web";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -10,6 +11,7 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
+  const { user, logout } = useAuth();
 
   const navItems = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -17,6 +19,17 @@ export function Layout({ children }: LayoutProps) {
     { href: "/sequences", label: "Sequences", icon: CalendarClock },
     { href: "/analytics", label: "Analytics", icon: BarChart2 },
   ];
+
+  const initials = user
+    ? [user.firstName, user.lastName]
+        .filter(Boolean)
+        .map((n) => n![0].toUpperCase())
+        .join("") || "U"
+    : "FS";
+
+  const displayName = user
+    ? [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "User"
+    : "Flow State";
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-sidebar border-r border-sidebar-border">
@@ -62,13 +75,28 @@ export function Layout({ children }: LayoutProps) {
 
       <div className="p-4 border-t border-sidebar-border mt-auto">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary font-bold text-xs">
-            FS
+          {user?.profileImageUrl ? (
+            <img
+              src={user.profileImageUrl}
+              alt={displayName}
+              className="w-8 h-8 rounded-full object-cover border border-primary/30"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary font-bold text-xs">
+              {initials}
+            </div>
+          )}
+          <div className="text-sm flex-1 min-w-0">
+            <div className="font-semibold text-sidebar-foreground truncate">{displayName}</div>
+            <div className="text-muted-foreground text-xs truncate">{user?.email ?? "Sales Manager"}</div>
           </div>
-          <div className="text-sm">
-            <div className="font-semibold text-sidebar-foreground">Flow State</div>
-            <div className="text-muted-foreground text-xs">Sales Manager</div>
-          </div>
+          <button
+            onClick={logout}
+            title="Sign out"
+            className="p-1.5 rounded-md text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors flex-shrink-0"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
     </div>

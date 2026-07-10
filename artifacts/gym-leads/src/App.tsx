@@ -11,6 +11,7 @@ import LeadDetail from "@/pages/lead-detail";
 import Sequences from "@/pages/sequences";
 import Analytics from "@/pages/analytics";
 import { useKeepAlive } from "@/hooks/use-keep-alive";
+import { useAuth } from "@workspace/replit-auth-web";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -37,13 +38,61 @@ function Router() {
   );
 }
 
+function LoginGate() {
+  const { isLoading, isAuthenticated, login } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <p className="text-muted-foreground text-sm">Loading…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-8 max-w-sm w-full px-6">
+          <img
+            src="/flow-state-logo.png"
+            alt="Flow State CRM"
+            className="w-56 h-auto object-contain"
+          />
+          <div className="text-center space-y-2">
+            <h1 className="text-2xl font-bold text-foreground">Welcome back</h1>
+            <p className="text-muted-foreground text-sm">
+              Sign in to access your gym lead pipeline
+            </p>
+          </div>
+          <button
+            onClick={login}
+            className="w-full py-3 px-6 rounded-lg font-semibold text-sm transition-all"
+            style={{
+              background: "linear-gradient(135deg, #00c8f0 0%, #0099bb 100%)",
+              color: "#0d1b2a",
+              boxShadow: "0 4px 24px rgba(0,200,240,0.3)",
+            }}
+          >
+            Sign in with Replit
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return <Router />;
+}
+
 function App() {
   useKeepAlive();
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
+          <LoginGate />
         </WouterRouter>
         <Toaster />
       </TooltipProvider>
