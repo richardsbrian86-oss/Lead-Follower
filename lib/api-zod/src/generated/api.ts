@@ -437,6 +437,166 @@ export const ListSequenceTemplatesResponse = zod.array(ListSequenceTemplatesResp
 
 
 /**
+ * @summary Stream AI-generated coaching insights based on current analytics data (SSE)
+ */
+export const StreamAnalyticsInsightsBody = zod.object({
+  "focus": zod.string().nullish().describe('Optional focus area for the insights (e.g. \"conversion\", \"sequences\")')
+})
+
+export const StreamAnalyticsInsightsResponse = zod.unknown()
+
+
+/**
+ * @summary List all conversations
+ */
+export const ListAnthropicConversationsResponseItem = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const ListAnthropicConversationsResponse = zod.array(ListAnthropicConversationsResponseItem)
+
+
+/**
+ * @summary Create a new conversation
+ */
+export const CreateAnthropicConversationBody = zod.object({
+  "title": zod.string()
+})
+
+export const CreateAnthropicConversationResponse = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get conversation with messages
+ */
+export const GetAnthropicConversationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetAnthropicConversationResponse = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "messages": zod.array(zod.object({
+  "id": zod.number(),
+  "conversationId": zod.number(),
+  "role": zod.string(),
+  "content": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Delete a conversation
+ */
+export const DeleteAnthropicConversationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteAnthropicConversationResponse = zod.void()
+
+
+/**
+ * @summary List messages in a conversation
+ */
+export const ListAnthropicMessagesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListAnthropicMessagesResponseItem = zod.object({
+  "id": zod.number(),
+  "conversationId": zod.number(),
+  "role": zod.string(),
+  "content": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const ListAnthropicMessagesResponse = zod.array(ListAnthropicMessagesResponseItem)
+
+
+/**
+ * @summary Send a message and receive an AI response (SSE stream)
+ */
+export const SendAnthropicMessageParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SendAnthropicMessageBody = zod.object({
+  "content": zod.string()
+})
+
+export const SendAnthropicMessageResponse = zod.unknown()
+
+
+/**
+ * @summary Get top-line pulse metrics
+ */
+export const GetAnalyticsPulseResponse = zod.object({
+  "avgConversionRate7d": zod.number(),
+  "avgConversionRate30d": zod.number(),
+  "avgLeadScore": zod.number(),
+  "pipelineVelocityDays": zod.number(),
+  "totalActiveLeads": zod.number()
+})
+
+
+/**
+ * @summary Get weekly conversion rate for the last 12 weeks
+ */
+export const GetAnalyticsConversionTrendResponse = zod.object({
+  "weeks": zod.array(zod.object({
+  "weekStart": zod.string(),
+  "total": zod.number(),
+  "won": zod.number(),
+  "rate": zod.number()
+}))
+})
+
+
+/**
+ * @summary Get lead count per pipeline stage
+ */
+export const GetAnalyticsPipelineFunnelResponse = zod.object({
+  "stages": zod.array(zod.object({
+  "status": zod.string(),
+  "count": zod.number(),
+  "label": zod.string()
+}))
+})
+
+
+/**
+ * @summary Get sequence step performance
+ */
+export const GetAnalyticsSequenceFunnelResponse = zod.object({
+  "steps": zod.array(zod.object({
+  "step": zod.number(),
+  "label": zod.string(),
+  "reached": zod.number(),
+  "convertedAfter": zod.number()
+}))
+})
+
+
+/**
+ * @summary Get lead count per score bracket
+ */
+export const GetAnalyticsScoreDistributionResponse = zod.object({
+  "buckets": zod.array(zod.object({
+  "label": zod.string(),
+  "min": zod.number(),
+  "max": zod.number(),
+  "count": zod.number()
+}))
+})
+
+
+/**
  * @summary Update a sequence step template
  */
 export const UpdateSequenceTemplateParams = zod.object({

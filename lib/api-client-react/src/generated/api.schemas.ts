@@ -214,6 +214,95 @@ export interface ActionQueue {
   actions: ActionItem[];
 }
 
+export interface AnalyticsInsightsInput {
+  /** Optional focus area for the insights (e.g. "conversion", "sequences") */
+  focus?: string | null;
+}
+
+export interface AnthropicConversation {
+  id: number;
+  title: string;
+  createdAt: string;
+}
+
+export interface AnthropicMessage {
+  id: number;
+  conversationId: number;
+  role: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface AnthropicConversationInput {
+  title: string;
+}
+
+export interface AnthropicMessageInput {
+  content: string;
+}
+
+export interface AnthropicConversationWithMessages {
+  id: number;
+  title: string;
+  createdAt: string;
+  messages: AnthropicMessage[];
+}
+
+export interface AnthropicError {
+  error: string;
+}
+
+export interface AnalyticsPulse {
+  avgConversionRate7d: number;
+  avgConversionRate30d: number;
+  avgLeadScore: number;
+  pipelineVelocityDays: number;
+  totalActiveLeads: number;
+}
+
+export interface ConversionTrendWeek {
+  weekStart: string;
+  total: number;
+  won: number;
+  rate: number;
+}
+
+export interface ConversionTrend {
+  weeks: ConversionTrendWeek[];
+}
+
+export interface PipelineFunnelStage {
+  status: string;
+  count: number;
+  label: string;
+}
+
+export interface PipelineFunnel {
+  stages: PipelineFunnelStage[];
+}
+
+export interface SequenceFunnelStep {
+  step: number;
+  label: string;
+  reached: number;
+  convertedAfter: number;
+}
+
+export interface SequenceFunnel {
+  steps: SequenceFunnelStep[];
+}
+
+export interface ScoreDistributionBucket {
+  label: string;
+  min: number;
+  max: number;
+  count: number;
+}
+
+export interface ScoreDistribution {
+  buckets: ScoreDistributionBucket[];
+}
+
 export type ListLeadsParams = {
 status?: LeadStatus;
 search?: string;

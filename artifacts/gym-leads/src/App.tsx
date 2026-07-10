@@ -9,6 +9,7 @@ import LeadsList from "@/pages/leads-list";
 import LeadNew from "@/pages/lead-new";
 import LeadDetail from "@/pages/lead-detail";
 import Sequences from "@/pages/sequences";
+import Analytics from "@/pages/analytics";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,6 +29,7 @@ function Router() {
         <Route path="/leads/new" component={LeadNew} />
         <Route path="/leads/:id" component={LeadDetail} />
         <Route path="/sequences" component={Sequences} />
+        <Route path="/analytics" component={Analytics} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

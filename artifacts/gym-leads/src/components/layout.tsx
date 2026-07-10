@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
-import { Users, Plus, Menu, CalendarClock, LayoutDashboard } from "lucide-react";
+import { Users, Plus, Menu, CalendarClock, LayoutDashboard, BarChart2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
@@ -15,6 +15,7 @@ export function Layout({ children }: LayoutProps) {
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/leads", label: "Leads Pipeline", icon: Users },
     { href: "/sequences", label: "Sequences", icon: CalendarClock },
+    { href: "/analytics", label: "Analytics", icon: BarChart2 },
   ];
 
   const SidebarContent = () => (
