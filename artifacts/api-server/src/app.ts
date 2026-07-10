@@ -12,6 +12,11 @@ import { seedSequenceTemplates } from "./lib/seed-templates";
 
 const app: Express = express();
 
+// Trust the first hop proxy so req.ip resolves to the real client IP.
+// express-rate-limit reads req.ip; without this all traffic appears to come
+// from the same proxy address and limits become effectively global.
+app.set("trust proxy", 1);
+
 // Security headers first
 app.use(helmet());
 
