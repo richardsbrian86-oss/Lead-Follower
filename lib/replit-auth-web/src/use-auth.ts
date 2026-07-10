@@ -7,13 +7,14 @@ interface AuthState {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: () => void;
-  logout: () => void;
+  logout: () => Promise<void>;
+  refetch: () => void;
 }
 
 export function useAuth(): AuthState {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,22 +40,22 @@ export function useAuth(): AuthState {
     return () => {
       cancelled = true;
     };
+  }, [tick]);
+
+  const logout = useCallback(async () => {
+    await fetch("/api/logout", { credentials: "include" });
+    setUser(null);
   }, []);
 
-  const login = useCallback(() => {
-    const base = import.meta.env.BASE_URL.replace(/\/+$/, "") || "/";
-    window.location.href = `/api/login?returnTo=${encodeURIComponent(base)}`;
-  }, []);
-
-  const logout = useCallback(() => {
-    window.location.href = "/api/logout";
+  const refetch = useCallback(() => {
+    setTick((t) => t + 1);
   }, []);
 
   return {
     user,
     isLoading,
     isAuthenticated: !!user,
-    login,
     logout,
+    refetch,
   };
 }

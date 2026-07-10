@@ -303,10 +303,21 @@ export interface ScoreDistribution {
   buckets: ScoreDistributionBucket[];
 }
 
+export type AuthUserRole = typeof AuthUserRole[keyof typeof AuthUserRole];
+
+
+export const AuthUserRole = {
+  owner: 'owner',
+  staff: 'staff',
+} as const;
+
 export interface AuthUser {
   id: string;
   /** @nullable */
   email: string | null;
+  /** @nullable */
+  name: string | null;
+  role: AuthUserRole;
   /** @nullable */
   firstName: string | null;
   /** @nullable */
@@ -319,21 +330,37 @@ export interface AuthUserEnvelope {
   user: AuthUser | null;
 }
 
-export interface MobileTokenExchangeRequest {
+export interface AuthRegisterInput {
+  email: string;
+  /** @minLength 8 */
+  password: string;
   /** @minLength 1 */
-  code: string;
-  /** @minLength 1 */
-  code_verifier: string;
-  /** @minLength 1 */
-  redirect_uri: string;
-  /** @minLength 1 */
-  state: string;
-  /** @minLength 1 */
-  nonce?: string;
+  name: string;
 }
 
-export interface MobileTokenExchangeSuccess {
+export interface AuthLoginInput {
+  email: string;
+  password: string;
+}
+
+export interface AuthLoginResult {
+  user: AuthUser;
+  /** Session token (SID) — store in SecureStore for mobile Bearer auth */
   token: string;
+}
+
+export interface AuthForgotPasswordInput {
+  email: string;
+}
+
+export interface AuthResetPasswordInput {
+  token: string;
+  /** @minLength 8 */
+  password: string;
+}
+
+export interface AuthSuccessMessage {
+  message: string;
 }
 
 export const LogoutSuccessValue = {
@@ -353,18 +380,5 @@ export type AuthorizationSessionHeaderParameter = string;
 export type ListLeadsParams = {
 status?: LeadStatus;
 search?: string;
-};
-
-export type BeginBrowserLoginParams = {
-/**
- * Relative path to redirect to after login (must start with `/`). Defaults to `/`.
- */
-returnTo?: string;
-};
-
-export type HandleBrowserLoginCallbackParams = {
-code?: string;
-state?: string;
-iss?: string;
 };
 

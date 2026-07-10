@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface MobileTokenExchangeSuccess {
+export interface AuthResetPasswordInput {
   token: string;
+  /** @minLength 8 */
+  password: string;
 }

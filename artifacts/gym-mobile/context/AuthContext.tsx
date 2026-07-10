@@ -1,15 +1,13 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import * as AuthSession from "expo-auth-session";
-import * as WebBrowser from "expo-web-browser";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import * as storage from "@/utils/storage";
-
-WebBrowser.maybeCompleteAuthSession();
 
 export const TOKEN_KEY = "gym_lead_session_token";
 
 export interface AuthUser {
   id: string;
   email: string | null;
+  name: string | null;
+  role: string;
   firstName: string | null;
   lastName: string | null;
   profileImageUrl: string | null;
@@ -20,49 +18,35 @@ interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: () => Promise<void>;
+  login: (email: string, password: string) => Promise<{ error?: string; code?: string }>;
   logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const REPL_ID = process.env.EXPO_PUBLIC_REPL_ID ?? "";
-const DOMAIN = process.env.EXPO_PUBLIC_DOMAIN ?? "";
-const BASE_URL = `https://${DOMAIN}`;
-
-export const redirectUri = AuthSession.makeRedirectUri({ scheme: "gym-mobile" });
+const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN ?? ""}`;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const exchangedRef = useRef(false);
 
-  const discovery = AuthSession.useAutoDiscovery("https://replit.com/oidc");
-
-  const [request, result, promptAsync] = AuthSession.useAuthRequest(
-    {
-      clientId: REPL_ID,
-      scopes: ["openid", "email", "profile", "offline_access"],
-      redirectUri,
-      usePKCE: true,
-      responseType: AuthSession.ResponseType.Code,
-    },
-    discovery,
-  );
-
-  const fetchUser = useCallback(async (sessionToken: string) => {
+  const fetchUser = useCallback(async (sessionToken: string): Promise<boolean> => {
     try {
       const resp = await fetch(`${BASE_URL}/api/auth/user`, {
         headers: { Authorization: `Bearer ${sessionToken}` },
       });
       if (resp.ok) {
         const data = await resp.json();
-        if (data.user) setUser(data.user);
+        if (data.user) {
+          setUser(data.user);
+          return true;
+        }
       }
     } catch {
       // ignore
     }
+    return false;
   }, []);
 
   useEffect(() => {
@@ -70,8 +54,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const saved = await storage.getItem(TOKEN_KEY);
         if (saved) {
-          setToken(saved);
-          await fetchUser(saved);
+          const ok = await fetchUser(saved);
+          if (ok) {
+            setToken(saved);
+          } else {
+            await storage.deleteItem(TOKEN_KEY);
+          }
         }
       } finally {
         setIsLoading(false);
@@ -80,57 +68,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loadToken();
   }, [fetchUser]);
 
-  useEffect(() => {
-    if (
-      result?.type === "success" &&
-      request?.codeVerifier &&
-      !exchangedRef.current
-    ) {
-      exchangedRef.current = true;
-      handleTokenExchange(
-        result.params.code,
-        request.codeVerifier,
-        result.params.state,
-        request.nonce,
-      );
-    }
-  }, [result]);
-
-  async function handleTokenExchange(
-    code: string,
-    codeVerifier: string,
-    state: string,
-    nonce?: string,
-  ) {
+  const login = useCallback(async (email: string, password: string): Promise<{ error?: string; code?: string }> => {
     try {
-      const resp = await fetch(`${BASE_URL}/api/mobile-auth/token-exchange`, {
+      const resp = await fetch(`${BASE_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          code,
-          code_verifier: codeVerifier,
-          redirect_uri: redirectUri,
-          state,
-          nonce,
-        }),
+        body: JSON.stringify({ email, password }),
       });
-      if (resp.ok) {
-        const data = await resp.json();
-        const newToken: string = data.token;
-        await storage.setItem(TOKEN_KEY, newToken);
-        setToken(newToken);
-        await fetchUser(newToken);
+      const data = await resp.json();
+      if (resp.ok && data.token) {
+        await storage.setItem(TOKEN_KEY, data.token);
+        setToken(data.token);
+        setUser(data.user);
+        return {};
       }
-    } catch (e) {
-      console.error("Token exchange failed", e);
-    } finally {
-      exchangedRef.current = false;
+      return { error: data.error || "Sign in failed.", code: data.code };
+    } catch {
+      return { error: "Network error. Please try again." };
     }
-  }
-
-  const login = useCallback(async () => {
-    await promptAsync();
-  }, [promptAsync]);
+  }, []);
 
   const logout = useCallback(async () => {
     const currentToken = token;
@@ -139,8 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await storage.deleteItem(TOKEN_KEY);
     if (currentToken) {
       try {
-        await fetch(`${BASE_URL}/api/mobile-auth/logout`, {
-          method: "POST",
+        await fetch(`${BASE_URL}/api/logout`, {
           headers: { Authorization: `Bearer ${currentToken}` },
         });
       } catch {
@@ -154,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         token,
         user,
-        isAuthenticated: !!token,
+        isAuthenticated: !!token && !!user,
         isLoading,
         login,
         logout,

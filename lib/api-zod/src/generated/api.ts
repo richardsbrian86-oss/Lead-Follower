@@ -629,6 +629,8 @@ export const GetCurrentAuthUserResponse = zod.object({
   "user": zod.union([zod.object({
   "id": zod.string(),
   "email": zod.string().email().nullable(),
+  "name": zod.string().nullable(),
+  "role": zod.enum(['owner', 'staff']),
   "firstName": zod.string().nullable(),
   "lastName": zod.string().nullable(),
   "profileImageUrl": zod.string().nullable()
@@ -637,68 +639,83 @@ export const GetCurrentAuthUserResponse = zod.object({
 
 
 /**
- * @summary Start the browser OIDC login flow
+ * @summary Create a new account with email and password
  */
-export const BeginBrowserLoginQueryParams = zod.object({
-  "returnTo": zod.coerce.string().optional().describe('Relative path to redirect to after login (must start with `\/`). Defaults to `\/`.')
+export const authRegisterBodyPasswordMin = 8;
+
+
+
+
+export const AuthRegisterBody = zod.object({
+  "email": zod.string().email(),
+  "password": zod.string().min(authRegisterBodyPasswordMin),
+  "name": zod.string().min(1)
 })
 
-export const BeginBrowserLoginResponse = zod.void()
+export const AuthRegisterResponse = zod.object({
+  "message": zod.string()
+})
 
 
 /**
- * @summary Complete the browser OIDC login flow
+ * @summary Sign in with email and password
  */
-export const HandleBrowserLoginCallbackQueryParams = zod.object({
-  "code": zod.coerce.string().optional(),
-  "state": zod.coerce.string().optional(),
-  "iss": zod.coerce.string().url().optional()
+export const AuthLoginBody = zod.object({
+  "email": zod.string().email(),
+  "password": zod.string()
 })
 
-export const HandleBrowserLoginCallbackResponse = zod.void()
+export const AuthLoginResponse = zod.object({
+  "user": zod.object({
+  "id": zod.string(),
+  "email": zod.string().email().nullable(),
+  "name": zod.string().nullable(),
+  "role": zod.enum(['owner', 'staff']),
+  "firstName": zod.string().nullable(),
+  "lastName": zod.string().nullable(),
+  "profileImageUrl": zod.string().nullable()
+}),
+  "token": zod.string().describe('Session token (SID) — store in SecureStore for mobile Bearer auth')
+})
 
 
 /**
- * @summary Clear the session and begin OIDC logout
+ * @summary Request a password reset email
  */
-export const LogoutBrowserSessionHeader = zod.object({
+export const AuthForgotPasswordBody = zod.object({
+  "email": zod.string().email()
+})
+
+export const AuthForgotPasswordResponse = zod.object({
+  "message": zod.string()
+})
+
+
+/**
+ * @summary Set a new password using a reset token
+ */
+export const authResetPasswordBodyPasswordMin = 8;
+
+
+
+export const AuthResetPasswordBody = zod.object({
+  "token": zod.string(),
+  "password": zod.string().min(authResetPasswordBodyPasswordMin)
+})
+
+export const AuthResetPasswordResponse = zod.object({
+  "message": zod.string()
+})
+
+
+/**
+ * @summary Clear the current session
+ */
+export const LogoutSessionHeader = zod.object({
   "Authorization": zod.string().optional().describe('Opaque session token — `Bearer <sid>`.')
 })
 
-export const LogoutBrowserSessionResponse = zod.void()
-
-
-/**
- * @summary Exchange a mobile OIDC code for a session token
- */
-
-
-
-
-
-
-
-export const ExchangeMobileAuthorizationCodeBody = zod.object({
-  "code": zod.string().min(1),
-  "code_verifier": zod.string().min(1),
-  "redirect_uri": zod.string().url().min(1),
-  "state": zod.string().min(1),
-  "nonce": zod.string().min(1).optional()
-})
-
-export const ExchangeMobileAuthorizationCodeResponse = zod.object({
-  "token": zod.string()
-})
-
-
-/**
- * @summary Delete a mobile session token
- */
-export const LogoutMobileSessionHeader = zod.object({
-  "Authorization": zod.string().optional().describe('Opaque session token — `Bearer <sid>`.')
-})
-
-export const LogoutMobileSessionResponse = zod.object({
+export const LogoutSessionResponse = zod.object({
   "success": zod.boolean()
 })
 

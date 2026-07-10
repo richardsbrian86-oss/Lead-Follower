@@ -678,103 +678,136 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthUserEnvelope'
-  /login:
-    get:
-      tags: [Auth]
-      operationId: beginBrowserLogin
-      summary: Start the browser OIDC login flow
-      parameters:
-        - name: returnTo
-          in: query
-          required: false
-          description: Relative path to redirect to after login (must start with `/`). Defaults to `/`.
-          schema:
-            type: string
-      responses:
-        '302':
-          description: Redirect to the OIDC authorization endpoint.
-  /callback:
-    get:
-      tags: [Auth]
-      operationId: handleBrowserLoginCallback
-      summary: Complete the browser OIDC login flow
-      parameters:
-        - name: code
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: state
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: iss
-          in: query
-          required: false
-          schema:
-            type: string
-            format: uri
-      responses:
-        '302':
-          description: Redirect to the returnTo path on success or /api/login on failure.
-  /logout:
-    get:
-      tags: [Auth]
-      operationId: logoutBrowserSession
-      summary: Clear the session and begin OIDC logout
-      parameters:
-        - $ref: '#/components/parameters/AuthorizationSessionHeader'
-        - $ref: '#/components/parameters/SessionCookie'
-      responses:
-        '302':
-          description: Redirect to the OIDC provider logout URL.
-  /mobile-auth/token-exchange:
+
+  /auth/register:
     post:
       tags: [Auth]
-      operationId: exchangeMobileAuthorizationCode
-      summary: Exchange a mobile OIDC code for a session token
+      operationId: authRegister
+      summary: Create a new account with email and password
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MobileTokenExchangeRequest'
+              $ref: '#/components/schemas/AuthRegisterInput'
       responses:
-        '200':
-          description: Session created successfully.
+        '201':
+          description: Account created. Verification email sent.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MobileTokenExchangeSuccess'
+                $ref: '#/components/schemas/AuthSuccessMessage'
         '400':
-          description: Missing or invalid required fields.
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Email already in use.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: authLogin
+      summary: Sign in with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthLoginInput'
+      responses:
+        '200':
+          description: Authenticated. Session cookie set.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthLoginResult'
+        '400':
+          description: Missing fields.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '401':
-          description: Token did not contain usable claims.
+          description: Invalid credentials.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-        '500':
-          description: Token exchange failed.
+        '403':
+          description: Email not yet verified.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-  /mobile-auth/logout:
+
+  /auth/forgot-password:
     post:
       tags: [Auth]
-      operationId: logoutMobileSession
-      summary: Delete a mobile session token
-      parameters:
-        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+      operationId: authForgotPassword
+      summary: Request a password reset email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthForgotPasswordInput'
       responses:
         '200':
-          description: Logout processed.
+          description: Reset email sent (if account exists).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSuccessMessage'
+        '400':
+          description: Invalid email.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      operationId: authResetPassword
+      summary: Set a new password using a reset token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthResetPasswordInput'
+      responses:
+        '200':
+          description: Password updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSuccessMessage'
+        '400':
+          description: Invalid or expired token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /logout:
+    get:
+      tags: [Auth]
+      operationId: logoutSession
+      summary: Clear the current session
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '200':
+          description: Session cleared.
           content:
             application/json:
               schema:
@@ -1414,13 +1447,18 @@ components:
 
     AuthUser:
       type: object
-      required: [id, email, firstName, lastName, profileImageUrl]
+      required: [id, email, name, role, firstName, lastName, profileImageUrl]
       properties:
         id:
           type: string
         email:
           type: [string, 'null']
           format: email
+        name:
+          type: [string, 'null']
+        role:
+          type: string
+          enum: [owner, staff]
         firstName:
           type: [string, 'null']
         lastName:
@@ -1435,31 +1473,58 @@ components:
           oneOf:
             - $ref: '#/components/schemas/AuthUser'
             - type: 'null'
-    MobileTokenExchangeRequest:
+    AuthRegisterInput:
       type: object
-      required: [code, code_verifier, redirect_uri, state]
+      required: [email, password, name]
       properties:
-        code:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        name:
           type: string
           minLength: 1
-        code_verifier:
-          type: string
-          minLength: 1
-        redirect_uri:
-          type: string
-          minLength: 1
-          format: uri
-        state:
-          type: string
-          minLength: 1
-        nonce:
-          type: string
-          minLength: 1
-    MobileTokenExchangeSuccess:
+    AuthLoginInput:
       type: object
-      required: [token]
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    AuthLoginResult:
+      type: object
+      required: [user, token]
+      properties:
+        user:
+          $ref: '#/components/schemas/AuthUser'
+        token:
+          type: string
+          description: Session token (SID) — store in SecureStore for mobile Bearer auth
+    AuthForgotPasswordInput:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+    AuthResetPasswordInput:
+      type: object
+      required: [token, password]
       properties:
         token:
+          type: string
+        password:
+          type: string
+          minLength: 8
+    AuthSuccessMessage:
+      type: object
+      required: [message]
+      properties:
+        message:
           type: string
     LogoutSuccess:
       type: object

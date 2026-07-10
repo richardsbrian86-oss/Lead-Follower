@@ -5,11 +5,15 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AuthUserRole } from './authUserRole';
 
 export interface AuthUser {
   id: string;
   /** @nullable */
   email: string | null;
+  /** @nullable */
+  name: string | null;
+  role: AuthUserRole;
   /** @nullable */
   firstName: string | null;
   /** @nullable */
