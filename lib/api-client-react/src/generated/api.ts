@@ -36,6 +36,7 @@ import type {
   AuthResetPasswordInput,
   AuthSuccessMessage,
   AuthUserEnvelope,
+  AuthVerifyEmailParams,
   ConversionTrend,
   CreateLeadEventInput,
   CreateLeadInput,
@@ -2609,6 +2610,90 @@ export const useAuthLogin = <TError = ErrorType<ErrorEnvelope>,
       > => {
       return useMutation(getAuthLoginMutationOptions(options));
     }
+
+export const getAuthVerifyEmailUrl = (params: AuthVerifyEmailParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/auth/verify-email?${stringifiedParams}` : `/api/auth/verify-email`
+}
+
+/**
+ * @summary Verify email address via token link
+ */
+export const authVerifyEmail = async (params: AuthVerifyEmailParams, options?: RequestInit): Promise<unknown> => {
+
+  return customFetch<unknown>(getAuthVerifyEmailUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getAuthVerifyEmailQueryKey = (params?: AuthVerifyEmailParams,) => {
+    return [
+    `/api/auth/verify-email`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getAuthVerifyEmailQueryOptions = <TData = Awaited<ReturnType<typeof authVerifyEmail>>, TError = ErrorType<void>>(params: AuthVerifyEmailParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof authVerifyEmail>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getAuthVerifyEmailQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof authVerifyEmail>>> = ({ signal }) => authVerifyEmail(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof authVerifyEmail>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type AuthVerifyEmailQueryResult = NonNullable<Awaited<ReturnType<typeof authVerifyEmail>>>
+export type AuthVerifyEmailQueryError = ErrorType<void>
+
+
+/**
+ * @summary Verify email address via token link
+ */
+
+export function useAuthVerifyEmail<TData = Awaited<ReturnType<typeof authVerifyEmail>>, TError = ErrorType<void>>(
+ params: AuthVerifyEmailParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof authVerifyEmail>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getAuthVerifyEmailQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getAuthForgotPasswordUrl = () => {
 

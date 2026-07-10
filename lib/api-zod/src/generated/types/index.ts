@@ -26,6 +26,7 @@ export * from './authSuccessMessage';
 export * from './authUser';
 export * from './authUserEnvelope';
 export * from './authUserRole';
+export * from './authVerifyEmailParams';
 export * from './conversionTrend';
 export * from './conversionTrendWeek';
 export * from './createLeadEventInput';

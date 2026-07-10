@@ -382,3 +382,10 @@ status?: LeadStatus;
 search?: string;
 };
 
+export type AuthVerifyEmailParams = {
+/**
+ * Verification token sent to the user's email.
+ */
+token: string;
+};
+

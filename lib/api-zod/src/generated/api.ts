@@ -680,6 +680,16 @@ export const AuthLoginResponse = zod.object({
 
 
 /**
+ * @summary Verify email address via token link
+ */
+export const AuthVerifyEmailQueryParams = zod.object({
+  "token": zod.coerce.string().describe('Verification token sent to the user\'s email.')
+})
+
+export const AuthVerifyEmailResponse = zod.void()
+
+
+/**
  * @summary Request a password reset email
  */
 export const AuthForgotPasswordBody = zod.object({

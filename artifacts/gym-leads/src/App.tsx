@@ -11,7 +11,7 @@ import LeadDetail from "@/pages/lead-detail";
 import Sequences from "@/pages/sequences";
 import Analytics from "@/pages/analytics";
 import { useKeepAlive } from "@/hooks/use-keep-alive";
-import { useAuth } from "@workspace/replit-auth-web";
+import { useAuth, AuthProvider } from "@workspace/replit-auth-web";
 import { useState, useEffect } from "react";
 
 const queryClient = new QueryClient({
@@ -394,7 +394,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <LoginGate />
+          <AuthProvider>
+            <LoginGate />
+          </AuthProvider>
         </WouterRouter>
         <Toaster />
       </TooltipProvider>

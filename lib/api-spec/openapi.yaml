@@ -747,6 +747,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
 
+  /auth/verify-email:
+    get:
+      tags: [Auth]
+      operationId: authVerifyEmail
+      summary: Verify email address via token link
+      parameters:
+        - name: token
+          in: query
+          required: true
+          description: Verification token sent to the user's email.
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirects to the app after verification (success or failure).
+
   /auth/forgot-password:
     post:
       tags: [Auth]

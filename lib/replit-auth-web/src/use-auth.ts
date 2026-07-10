@@ -1,7 +1,15 @@
-import { useState, useEffect, useCallback } from "react";
-import type { AuthUser } from "@workspace/api-client-react";
+import { useState, useEffect, useCallback, createContext, useContext, type ReactNode } from "react";
+import { createElement } from "react";
 
-export type { AuthUser };
+export interface AuthUser {
+  id: string;
+  email: string | null;
+  name: string | null;
+  role: string;
+  firstName: string | null;
+  lastName: string | null;
+  profileImageUrl: string | null;
+}
 
 interface AuthState {
   user: AuthUser | null;
@@ -11,13 +19,16 @@ interface AuthState {
   refetch: () => void;
 }
 
-export function useAuth(): AuthState {
+const AuthContext = createContext<AuthState | null>(null);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setIsLoading(true);
 
     fetch("/api/auth/user", { credentials: "include" })
       .then((res) => {
@@ -51,11 +62,16 @@ export function useAuth(): AuthState {
     setTick((t) => t + 1);
   }, []);
 
-  return {
-    user,
-    isLoading,
-    isAuthenticated: !!user,
-    logout,
-    refetch,
-  };
+  return createElement(AuthContext.Provider, {
+    value: { user, isLoading, isAuthenticated: !!user, logout, refetch },
+    children,
+  });
+}
+
+export function useAuth(): AuthState {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useAuth must be used inside <AuthProvider>. Wrap your app in <AuthProvider>.");
+  }
+  return ctx;
 }
