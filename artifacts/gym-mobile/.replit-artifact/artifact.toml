@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/gym-mobile/"
+title = "Gym Lead Mobile"
+version = "1.0.0"
+id = "artifacts/gym-mobile"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/gym-mobile/" ]
+localPort = 22844
+
+[services.development]
+run = "pnpm --filter @workspace/gym-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/gym-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/gym-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "22844"
+BASE_PATH = "/gym-mobile/"
