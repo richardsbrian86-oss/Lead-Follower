@@ -238,6 +238,27 @@ export const GetDashboardSummaryResponse = zod.object({
 
 
 /**
+ * Returns up to 8 leads ranked by urgency score for staff to action today
+ * @summary Get prioritized action queue for today
+ */
+export const GetDashboardActionQueueResponse = zod.object({
+  "actions": zod.array(zod.object({
+  "leadId": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "status": zod.enum(['new', 'contacted', 'interested', 'won', 'lost']),
+  "score": zod.number(),
+  "urgencyScore": zod.number(),
+  "primaryReason": zod.string(),
+  "secondaryReasons": zod.array(zod.string()),
+  "daysSinceContact": zod.number().nullish(),
+  "sequenceStepDue": zod.number().nullish()
+}))
+})
+
+
+/**
  * @summary Get predictive score for a lead
  */
 export const GetLeadScoreParams = zod.object({

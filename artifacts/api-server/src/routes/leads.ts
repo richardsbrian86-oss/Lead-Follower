@@ -21,6 +21,7 @@ import {
   GetDashboardSummaryResponse,
   GetLeadScoreParams,
   GetLeadScoreResponse,
+  GetDashboardActionQueueResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -344,6 +345,148 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
   };
 
   res.json(GetDashboardSummaryResponse.parse(summary));
+});
+
+router.get("/dashboard/action-queue", async (_req, res): Promise<void> => {
+  const now = new Date();
+  // Overdue follow-up threshold: 3 days since visit without conversion (mirrors followUpsDueToday)
+  const followUpThreshold = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+  // Sequence step "due" window: any step whose nextSendAt is at or before now+24h
+  const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const ago7days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const ago14days = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+
+  // Fetch active leads (exclude won/lost)
+  const activeLeads = await db
+    .select()
+    .from(leadsTable)
+    .where(sql`${leadsTable.status} NOT IN ('won', 'lost')`);
+
+  // Fetch all active (non-paused, non-cancelled) sequences
+  const sequences = await db
+    .select()
+    .from(leadSequencesTable)
+    .where(
+      and(
+        eq(leadSequencesTable.paused, false),
+        eq(leadSequencesTable.cancelled, false),
+      ),
+    );
+
+  const seqByLeadId = new Map(sequences.map((s) => [s.leadId, s]));
+
+  // Most recent event per lead (for stale-contact calculation)
+  const recentEventRows = await db
+    .select({
+      leadId: leadEventsTable.leadId,
+      latestAt: sql<Date>`MAX(${leadEventsTable.createdAt})`,
+    })
+    .from(leadEventsTable)
+    .groupBy(leadEventsTable.leadId);
+
+  const lastEventByLeadId = new Map(recentEventRows.map((r) => [r.leadId, new Date(r.latestAt)]));
+
+  type ActionEntry = {
+    leadId: number;
+    name: string;
+    email: string;
+    phone: string;
+    status: "new" | "contacted" | "interested" | "won" | "lost";
+    score: number;
+    urgencyScore: number;
+    primaryReason: string;
+    secondaryReasons: string[];
+    daysSinceContact: number | null;
+    sequenceStepDue: number | null;
+  };
+
+  const entries: ActionEntry[] = [];
+
+  for (const lead of activeLeads) {
+    let urgencyScore = 0;
+    const reasons: string[] = [];
+    let sequenceStepDue: number | null = null;
+
+    // --- Rule 1: Overdue follow-up (+50) ---
+    // A lead that visited 3+ days ago and is still new/contacted needs a human touch.
+    // This is the manual follow-up signal, independent of the automated sequence.
+    const isOverdueFollowUp =
+      (lead.status === "new" || lead.status === "contacted") &&
+      new Date(lead.visitDate) <= followUpThreshold;
+
+    if (isOverdueFollowUp) {
+      urgencyScore += 50;
+      reasons.push("Overdue follow-up");
+    }
+
+    // --- Rule 2: Sequence step due (+40) ---
+    // An active sequence step is due within the next 24h (or already past-due).
+    // Treated as a single "sequence due" signal regardless of how overdue it is.
+    const seq = seqByLeadId.get(lead.id);
+    const seqNextSendAt = seq?.nextSendAt ? new Date(seq.nextSendAt) : null;
+    const isSeqStepDue = seqNextSendAt !== null && seqNextSendAt <= in24h;
+
+    if (isSeqStepDue && seq) {
+      urgencyScore += 40;
+      reasons.push(seqNextSendAt! < now ? "Sequence step overdue" : "Sequence step due today");
+      sequenceStepDue = seq.currentStep;
+    }
+
+    // --- Rule 3: Lead score weight (+20 / +10) ---
+    if (lead.score >= 70) {
+      urgencyScore += 20;
+      reasons.push("High lead score");
+    } else if (lead.score >= 40) {
+      urgencyScore += 10;
+      reasons.push("Medium lead score");
+    }
+
+    // --- Rule 4: Days since last contact (+25 / +15) ---
+    // Fall back to visitDate so brand-new leads with no events are not falsely penalised.
+    const lastEvent = lastEventByLeadId.get(lead.id);
+    const lastKnownActivity: Date = lastEvent ?? new Date(lead.visitDate);
+    const daysSinceContact = Math.floor(
+      (now.getTime() - lastKnownActivity.getTime()) / (1000 * 60 * 60 * 24),
+    );
+
+    if (lastKnownActivity < ago14days) {
+      urgencyScore += 25;
+      reasons.push("No contact in 14+ days");
+    } else if (lastKnownActivity < ago7days) {
+      urgencyScore += 15;
+      reasons.push("No contact in 7+ days");
+    }
+
+    // --- Rule 5: Status weight (+15 / +5) ---
+    if (lead.status === "interested") {
+      urgencyScore += 15;
+      reasons.push("Interested lead");
+    } else if (lead.status === "contacted") {
+      urgencyScore += 5;
+    }
+
+    // Skip leads with no urgency (e.g. brand-new leads with no triggers yet)
+    if (urgencyScore === 0) continue;
+
+    entries.push({
+      leadId: lead.id,
+      name: lead.name,
+      email: lead.email,
+      phone: lead.phone,
+      status: lead.status,
+      score: lead.score,
+      urgencyScore,
+      primaryReason: reasons[0] ?? "Needs attention",
+      secondaryReasons: reasons.slice(1),
+      daysSinceContact,
+      sequenceStepDue,
+    });
+  }
+
+  entries.sort((a, b) => b.urgencyScore - a.urgencyScore);
+  const top8 = entries.slice(0, 8);
+
+  res.json(GetDashboardActionQueueResponse.parse({ actions: top8 }));
 });
 
 export default router;

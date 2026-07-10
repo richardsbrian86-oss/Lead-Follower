@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './actionItem';
+export * from './actionQueue';
 export * from './createLeadEventInput';
 export * from './createLeadInput';
 export * from './dashboardSummary';

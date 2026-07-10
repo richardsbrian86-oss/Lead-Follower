@@ -3,6 +3,7 @@ import {
   useDraftLeadMessage,
   useSendLeadMessage,
   getGetLeadMessagesQueryKey,
+  getGetDashboardActionQueueQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -68,6 +69,7 @@ export function SendMessageModal({ leadId, open, onClose }: SendMessageModalProp
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetLeadMessagesQueryKey(leadId) });
+          queryClient.invalidateQueries({ queryKey: getGetDashboardActionQueueQueryKey() });
           toast({ title: "Message sent!", description: `${channel === "email" ? "Email" : "SMS"} delivered successfully.` });
           setSubject("");
           setBody("");

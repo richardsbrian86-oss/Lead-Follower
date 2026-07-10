@@ -185,6 +185,20 @@ paths:
               schema:
                 $ref: "#/components/schemas/DashboardSummary"
 
+  /dashboard/action-queue:
+    get:
+      operationId: getDashboardActionQueue
+      tags: [dashboard]
+      summary: Get prioritized action queue for today
+      description: Returns up to 8 leads ranked by urgency score for staff to action today
+      responses:
+        "200":
+          description: Prioritized action queue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionQueue"
+
   /leads/{id}/score:
     get:
       operationId: getLeadScore
@@ -798,3 +812,53 @@ components:
           type: integer
         toneInstruction:
           type: string
+
+    ActionItem:
+      type: object
+      properties:
+        leadId:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        status:
+          $ref: "#/components/schemas/LeadStatus"
+        score:
+          type: integer
+        urgencyScore:
+          type: integer
+        primaryReason:
+          type: string
+        secondaryReasons:
+          type: array
+          items:
+            type: string
+        daysSinceContact:
+          type: integer
+          nullable: true
+        sequenceStepDue:
+          type: integer
+          nullable: true
+      required:
+        - leadId
+        - name
+        - email
+        - phone
+        - status
+        - score
+        - urgencyScore
+        - primaryReason
+        - secondaryReasons
+
+    ActionQueue:
+      type: object
+      properties:
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActionItem"
+      required:
+        - actions

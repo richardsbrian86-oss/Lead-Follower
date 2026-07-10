@@ -9,6 +9,7 @@ import {
   getListLeadsQueryKey,
   getGetDashboardSummaryQueryKey,
   getGetLeadSequenceQueryKey,
+  getGetDashboardActionQueueQueryKey,
   useCancelLeadSequence,
   LeadStatus,
   LeadWithEvents,
@@ -110,6 +111,7 @@ export default function LeadDetail() {
           queryClient.invalidateQueries({ queryKey: getGetLeadQueryKey(id) });
           queryClient.invalidateQueries({ queryKey: getListLeadsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetDashboardActionQueueQueryKey() });
           // Auto-cancel sequence when lead is marked Won
           if (newStatus === "won") {
             cancelSequence.mutate(

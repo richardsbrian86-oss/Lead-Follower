@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ActionQueue,
   CreateLeadEventInput,
   CreateLeadInput,
   DashboardSummary,
@@ -653,6 +654,84 @@ export function useGetDashboardSummary<TData = Awaited<ReturnType<typeof getDash
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDashboardSummaryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetDashboardActionQueueUrl = () => {
+
+
+
+
+  return `/api/dashboard/action-queue`
+}
+
+/**
+ * Returns up to 8 leads ranked by urgency score for staff to action today
+ * @summary Get prioritized action queue for today
+ */
+export const getDashboardActionQueue = async ( options?: RequestInit): Promise<ActionQueue> => {
+
+  return customFetch<ActionQueue>(getGetDashboardActionQueueUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDashboardActionQueueQueryKey = () => {
+    return [
+    `/api/dashboard/action-queue`
+    ] as const;
+    }
+
+
+export const getGetDashboardActionQueueQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardActionQueue>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardActionQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardActionQueueQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardActionQueue>>> = ({ signal }) => getDashboardActionQueue({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDashboardActionQueue>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDashboardActionQueueQueryResult = NonNullable<Awaited<ReturnType<typeof getDashboardActionQueue>>>
+export type GetDashboardActionQueueQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get prioritized action queue for today
+ */
+
+export function useGetDashboardActionQueue<TData = Awaited<ReturnType<typeof getDashboardActionQueue>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardActionQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDashboardActionQueueQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -196,6 +196,24 @@ export interface UpdateSequenceTemplateInput {
   toneInstruction?: string;
 }
 
+export interface ActionItem {
+  leadId: number;
+  name: string;
+  email: string;
+  phone: string;
+  status: LeadStatus;
+  score: number;
+  urgencyScore: number;
+  primaryReason: string;
+  secondaryReasons: string[];
+  daysSinceContact?: number | null;
+  sequenceStepDue?: number | null;
+}
+
+export interface ActionQueue {
+  actions: ActionItem[];
+}
+
 export type ListLeadsParams = {
 status?: LeadStatus;
 search?: string;

@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { ScoreBadge } from "@/components/score-badge";
+import { ActionQueue } from "@/components/action-queue";
 
 export default function Dashboard() {
   const { data: summary, isLoading, isError } = useGetDashboardSummary({
@@ -65,6 +66,8 @@ export default function Dashboard() {
         <h1 className="text-4xl font-extrabold tracking-tight">Overview</h1>
         <p className="text-muted-foreground mt-1 text-lg">Your live lead pipeline and performance metrics.</p>
       </div>
+
+      <ActionQueue />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((stat, i) => (
