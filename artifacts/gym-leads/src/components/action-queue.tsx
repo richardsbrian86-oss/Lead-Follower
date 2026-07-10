@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Zap, Phone, MessageSquare, ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
+import { Zap, Phone, MessageSquare, ArrowRight, ChevronDown, ChevronUp, AlertTriangle, RefreshCw, Clock } from "lucide-react";
 import { Link } from "wouter";
 import { StatusBadge } from "@/components/status-badge";
 import { ScoreBadge } from "@/components/score-badge";
@@ -17,6 +17,15 @@ function reasonColor(reason: string): { border: string; pill: string } {
   if (r.includes("overdue")) return { border: "border-l-rose-500", pill: "bg-rose-500/20 text-rose-400" };
   if (r.includes("sequence")) return { border: "border-l-cyan-500", pill: "bg-cyan-500/20 text-cyan-400" };
   return { border: "border-l-amber-500", pill: "bg-amber-500/20 text-amber-400" };
+}
+
+function formatAge(ts: number): string {
+  const mins = Math.floor((Date.now() - ts) / 60_000);
+  if (mins < 1) return "just now";
+  if (mins === 1) return "1 min ago";
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  return hrs === 1 ? "1 hr ago" : `${hrs} hrs ago`;
 }
 
 interface ActionCardProps {
@@ -100,8 +109,9 @@ function ActionCard({ item }: ActionCardProps) {
 
 export function ActionQueue() {
   const [collapsed, setCollapsed] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
 
-  const { data, isLoading } = useGetDashboardActionQueue({
+  const { data, isLoading, isError, dataUpdatedAt, refetch } = useGetDashboardActionQueue({
     query: {
       queryKey: getGetDashboardActionQueueQueryKey(),
       refetchInterval: 60_000,
@@ -110,6 +120,16 @@ export function ActionQueue() {
 
   const actions = data?.actions ?? [];
   const count = actions.length;
+  const hasStaleData = isError && data !== undefined;
+
+  async function handleRetry() {
+    setIsRetrying(true);
+    try {
+      await refetch();
+    } finally {
+      setIsRetrying(false);
+    }
+  }
 
   return (
     <Card className="border-none shadow-md">
@@ -142,20 +162,53 @@ export function ActionQueue() {
 
       {!collapsed && (
         <CardContent className="pt-4">
+          {isError && (
+            <div className="flex items-start gap-3 mb-4 px-3 py-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium leading-snug">
+                  {hasStaleData
+                    ? "Couldn't refresh — showing last known data"
+                    : "Failed to load the action queue"}
+                </p>
+                {hasStaleData && dataUpdatedAt > 0 && (
+                  <p className="text-xs mt-0.5 flex items-center gap-1 text-rose-400/70">
+                    <Clock className="w-3 h-3" />
+                    Last updated {formatAge(dataUpdatedAt)}
+                  </p>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="shrink-0 h-7 px-2 text-rose-400 hover:text-rose-300 hover:bg-rose-500/20"
+                onClick={(e) => { e.stopPropagation(); handleRetry(); }}
+                disabled={isRetrying}
+              >
+                <RefreshCw className={cn("w-3.5 h-3.5 mr-1", isRetrying && "animate-spin")} />
+                {isRetrying ? "Retrying…" : "Retry"}
+              </Button>
+            </div>
+          )}
+
           {isLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
                 <Skeleton key={i} className="h-16 w-full rounded-lg" />
               ))}
             </div>
-          ) : count === 0 ? (
+          ) : !isError && count === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <span className="text-3xl mb-2">🎯</span>
               <p className="text-muted-foreground font-medium">All caught up for today</p>
               <p className="text-xs text-muted-foreground mt-1">No urgent actions right now — check back later.</p>
             </div>
+          ) : isError && !hasStaleData ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <p className="text-muted-foreground text-sm">No data available. Use Retry above to try again.</p>
+            </div>
           ) : (
-            <div className="space-y-3">
+            <div className={cn("space-y-3", hasStaleData && "opacity-60")}>
               {actions.map((item) => (
                 <ActionCard key={item.leadId} item={item} />
               ))}
