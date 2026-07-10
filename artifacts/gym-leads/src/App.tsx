@@ -10,6 +10,7 @@ import LeadNew from "@/pages/lead-new";
 import LeadDetail from "@/pages/lead-detail";
 import Sequences from "@/pages/sequences";
 import Analytics from "@/pages/analytics";
+import { useKeepAlive } from "@/hooks/use-keep-alive";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -37,6 +38,7 @@ function Router() {
 }
 
 function App() {
+  useKeepAlive();
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
