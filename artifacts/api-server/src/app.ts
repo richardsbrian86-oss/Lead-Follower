@@ -56,22 +56,45 @@ const generalLimiter = rateLimit({
   },
 });
 
-// Strict rate limit for AI/send endpoints — 10 req / 15 min per IP
-const strictLimiter = rateLimit({
+// Draft limiter — permissive, no external cost (just AI text generation)
+// 50 drafts per 15 min is generous for any real user workflow
+const draftLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 50,
   standardHeaders: true,
   legacyHeaders: false,
   handler(_req: Request, res: Response) {
-    res.status(429).json({ error: "Rate limit exceeded for this action." });
+    res.status(429).json({ error: "Too many draft requests, please slow down." });
+  },
+});
+
+// Send/action limiter — strict because these fire real emails/SMS (external cost)
+const sendLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler(_req: Request, res: Response) {
+    res.status(429).json({ error: "Send rate limit reached. Please wait before sending more messages." });
+  },
+});
+
+// AI chat limiter — moderate; each message costs API credits
+const chatLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler(_req: Request, res: Response) {
+    res.status(429).json({ error: "AI chat rate limit reached. Please wait before sending more messages." });
   },
 });
 
 app.use("/api", generalLimiter);
-app.use("/api/leads/:id/messages/draft", strictLimiter);
-app.use("/api/leads/:id/messages/send", strictLimiter);
-app.use("/api/analytics/insights", strictLimiter);
-app.use("/api/anthropic/conversations/:id/messages", strictLimiter);
+app.use("/api/leads/:id/messages/draft", draftLimiter);
+app.use("/api/leads/:id/messages/send", sendLimiter);
+app.use("/api/analytics/insights", sendLimiter);
+app.use("/api/anthropic/conversations/:id/messages", chatLimiter);
 
 // Populate req.user from session cookie / bearer token
 app.use(authMiddleware as (req: Request, res: Response, next: NextFunction) => void);
