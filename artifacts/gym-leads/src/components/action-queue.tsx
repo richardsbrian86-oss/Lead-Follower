@@ -1,15 +1,22 @@
 import React, { useState } from "react";
-import { useGetDashboardActionQueue, getGetDashboardActionQueueQueryKey } from "@workspace/api-client-react";
-import type { ActionItem } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetDashboardActionQueue,
+  getGetDashboardActionQueueQueryKey,
+  useUpdateLead,
+  useCreateLeadEvent,
+} from "@workspace/api-client-react";
+import type { ActionItem, ActionQueue } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Zap, Phone, MessageSquare, ArrowRight, ChevronDown, ChevronUp, AlertTriangle, RefreshCw, Clock } from "lucide-react";
+import { Zap, Phone, MessageSquare, ArrowRight, ChevronDown, ChevronUp, AlertTriangle, RefreshCw, Clock, CheckCircle } from "lucide-react";
 import { Link } from "wouter";
 import { StatusBadge } from "@/components/status-badge";
 import { ScoreBadge } from "@/components/score-badge";
 import { SendMessageModal } from "@/components/send-message-modal";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 function reasonColor(reason: string): { border: string; pill: string } {
@@ -30,11 +37,15 @@ function formatAge(ts: number): string {
 
 interface ActionCardProps {
   item: ActionItem;
+  onMarkContacted: (leadId: number) => void;
+  isMarkingContacted: boolean;
 }
 
-function ActionCard({ item }: ActionCardProps) {
+function ActionCard({ item, onMarkContacted, isMarkingContacted }: ActionCardProps) {
   const [msgOpen, setMsgOpen] = useState(false);
   const { border, pill } = reasonColor(item.primaryReason);
+  const isInterested = item.status === "interested";
+  const contactLabel = isInterested ? "Log contact" : "Contacted";
 
   return (
     <>
@@ -76,6 +87,19 @@ function ActionCard({ item }: ActionCardProps) {
         </div>
 
         <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+          <button
+            onClick={() => onMarkContacted(item.leadId)}
+            disabled={isMarkingContacted}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-2.5 h-8 rounded-full text-xs font-medium transition-colors",
+              "bg-secondary/60 hover:bg-emerald-500/20 hover:text-emerald-400",
+              isMarkingContacted && "opacity-50 cursor-not-allowed",
+            )}
+            title={`✓ ${contactLabel}`}
+          >
+            <CheckCircle className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{contactLabel}</span>
+          </button>
           <a
             href={`tel:${item.phone}`}
             onClick={(e) => e.stopPropagation()}
@@ -110,6 +134,11 @@ function ActionCard({ item }: ActionCardProps) {
 export function ActionQueue() {
   const [collapsed, setCollapsed] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [markingIds, setMarkingIds] = useState<Set<number>>(new Set());
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const updateLead = useUpdateLead();
+  const createEvent = useCreateLeadEvent();
 
   const { data, isLoading, isError, dataUpdatedAt, refetch } = useGetDashboardActionQueue({
     query: {
@@ -130,6 +159,54 @@ export function ActionQueue() {
       setIsRetrying(false);
     }
   }
+
+  const handleMarkContacted = (leadId: number) => {
+    const item = actions.find((a) => a.leadId === leadId);
+    if (!item) return;
+
+    setMarkingIds((prev) => new Set(prev).add(leadId));
+
+    const optimisticallyRemove = () => {
+      queryClient.setQueryData<ActionQueue>(
+        getGetDashboardActionQueueQueryKey(),
+        (old) => old ? { ...old, actions: old.actions.filter((a) => a.leadId !== leadId) } : old,
+      );
+    };
+
+    if (item.status === "interested") {
+      createEvent.mutate(
+        { id: leadId, data: { type: "note", note: "Contacted" } },
+        {
+          onSuccess: () => {
+            optimisticallyRemove();
+            toast({ title: "Contact logged", description: `${item.name} marked as contacted.` });
+          },
+          onError: () => {
+            toast({ title: "Failed to log contact", description: "Please try again.", variant: "destructive" });
+          },
+          onSettled: () => {
+            setMarkingIds((prev) => { const s = new Set(prev); s.delete(leadId); return s; });
+          },
+        },
+      );
+    } else {
+      updateLead.mutate(
+        { id: leadId, data: { status: "contacted" } },
+        {
+          onSuccess: () => {
+            optimisticallyRemove();
+            toast({ title: "Marked as contacted", description: `${item.name} moved to contacted.` });
+          },
+          onError: () => {
+            toast({ title: "Failed to update lead", description: "Please try again.", variant: "destructive" });
+          },
+          onSettled: () => {
+            setMarkingIds((prev) => { const s = new Set(prev); s.delete(leadId); return s; });
+          },
+        },
+      );
+    }
+  };
 
   return (
     <Card className="border-none shadow-md">
@@ -210,7 +287,12 @@ export function ActionQueue() {
           ) : (
             <div className={cn("space-y-3", hasStaleData && "opacity-60")}>
               {actions.map((item) => (
-                <ActionCard key={item.leadId} item={item} />
+                <ActionCard
+                  key={item.leadId}
+                  item={item}
+                  onMarkContacted={handleMarkContacted}
+                  isMarkingContacted={markingIds.has(item.leadId)}
+                />
               ))}
             </div>
           )}
