@@ -1,28 +1,30 @@
 /**
  * E2E tests for the strict rate limiter on AI/send endpoints.
  *
- * The strict limiter allows 10 requests per 15-minute window per IP.
- * The 11th request (and beyond) must return HTTP 429 with a JSON error body.
- *
- * Covered endpoints (app.ts strict limiter):
- *   POST /api/leads/:id/messages/draft
- *   POST /api/leads/:id/messages/send
+ * Covered endpoints and their per-IP limits (app.ts):
+ *   POST /api/leads/:id/messages/draft  — 50 req / 15-min window
+ *   POST /api/leads/:id/messages/send   — 20 req / 15-min window
  *
  * These tests send the minimal request body and accept any non-429 status code
- * (200, 400, 401, 404, etc.) for the first 10 requests, then assert 429 on the
- * 11th.  The actual business-logic response is irrelevant here — what matters is
- * that the rate-limit layer fires before requireAuth or the route handler.
+ * (200, 400, 401, 404, etc.) for requests within the limit, then assert 429
+ * once the threshold is crossed.  The actual business-logic response is
+ * irrelevant — what matters is that the rate-limit layer fires before
+ * requireAuth or the route handler.
  *
  * NOTE: The rate-limit window is per-IP and persists for 15 minutes in the dev
- * environment.  If this suite is run multiple times within the same window against
- * the same server, earlier runs may have already consumed some of the quota, which
- * means 429 can appear before the 11th request — this is still a passing result.
+ * environment.  If this suite is run multiple times within the same window
+ * against the same server, earlier runs may have already consumed some of the
+ * quota, which means 429 can appear before the threshold request — this is
+ * still a passing result.
  */
 
 import { test, expect } from "@playwright/test";
 
 const PLACEHOLDER_LEAD_ID = "00000000-0000-0000-0000-000000000001";
-const STRICT_LIMIT = 10;
+
+// Per-IP per-window limits that match app.ts configuration
+const DRAFT_LIMIT = 50;
+const SEND_LIMIT = 20;
 
 async function hammering(
   request: import("@playwright/test").APIRequestContext,
@@ -40,12 +42,12 @@ async function hammering(
 }
 
 test.describe("Strict rate limiter — draft endpoint", () => {
-  test("returns 429 with error body after exceeding 10-req/window threshold", async ({
+  test("returns 429 with error body after exceeding draft rate limit threshold", async ({
     request,
   }) => {
     const endpoint = `/api/leads/${PLACEHOLDER_LEAD_ID}/messages/draft`;
 
-    const statuses = await hammering(request, endpoint, STRICT_LIMIT + 1, {
+    const statuses = await hammering(request, endpoint, DRAFT_LIMIT + 1, {
       tone: "friendly",
     });
 
@@ -65,12 +67,12 @@ test.describe("Strict rate limiter — draft endpoint", () => {
 });
 
 test.describe("Strict rate limiter — send endpoint", () => {
-  test("same 10-req/window limit applies to the send endpoint", async ({
+  test("same per-window limit applies to the send endpoint", async ({
     request,
   }) => {
     const endpoint = `/api/leads/${PLACEHOLDER_LEAD_ID}/messages/send`;
 
-    const statuses = await hammering(request, endpoint, STRICT_LIMIT + 1, {
+    const statuses = await hammering(request, endpoint, SEND_LIMIT + 1, {
       message: "Hello from rate limit test",
       channel: "sms",
     });
@@ -96,7 +98,9 @@ test.describe("General rate limiter — API-wide limit", () => {
 
     let last429Body: Record<string, unknown> | null = null;
 
-    for (let i = 0; i < STRICT_LIMIT + 1; i++) {
+    // Draft limit may already be exhausted from the earlier suite — cap at
+    // DRAFT_LIMIT + 1 but break early on the first 429.
+    for (let i = 0; i < DRAFT_LIMIT + 1; i++) {
       const resp = await request.post(endpoint, {
         data: { tone: "professional" },
       });

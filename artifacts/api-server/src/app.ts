@@ -45,10 +45,33 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// Paths (relative to /api) that are exempt from the general rate limiter.
+// Auth endpoints have their own dedicated limiter (authLimiter below) and must
+// not share the general budget — if other test suites consume that budget,
+// auth routes would start returning 429, breaking auth e2e tests.
+// The health probe is a liveness check and must always be reachable.
+function isExemptFromGeneralLimit(req: Request): boolean {
+  return req.path.startsWith("/auth/") || req.path === "/logout" || req.path === "/healthz";
+}
+
 // General rate limit — 200 req / 15 min per IP
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: isExemptFromGeneralLimit,
+  handler(_req: Request, res: Response) {
+    res.status(429).json({ error: "Too many requests, please try again later." });
+  },
+});
+
+// Auth limiter — protects sensitive credential endpoints from brute-force and
+// credential-stuffing attacks.  20 req / 15 min per IP is enough headroom for
+// normal use (even with automated e2e test suites) while blocking abuse.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   handler(_req: Request, res: Response) {
@@ -64,7 +87,7 @@ const draftLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler(_req: Request, res: Response) {
-    res.status(429).json({ error: "Too many draft requests, please slow down." });
+    res.status(429).json({ error: "Draft rate limit reached. Please slow down." });
   },
 });
 
@@ -91,6 +114,13 @@ const chatLimiter = rateLimit({
 });
 
 app.use("/api", generalLimiter);
+// Auth endpoints have their own dedicated limiter (excluded from generalLimiter above)
+app.use([
+  "/api/auth/login",
+  "/api/auth/register",
+  "/api/auth/forgot-password",
+  "/api/auth/reset-password",
+], authLimiter);
 app.use("/api/leads/:id/messages/draft", draftLimiter);
 app.use("/api/leads/:id/messages/send", sendLimiter);
 app.use("/api/analytics/insights", sendLimiter);
