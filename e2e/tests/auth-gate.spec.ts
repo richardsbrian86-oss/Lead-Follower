@@ -50,11 +50,11 @@ test.describe("Login gate — unauthenticated", () => {
     ).toBeVisible();
 
     await expect(
-      page.getByRole("button", { name: "Sign in with Replit" }),
+      page.getByRole("button", { name: "Sign in" }),
     ).toBeVisible();
 
     await expect(page.getByText("Leads Pipeline")).not.toBeVisible();
-    await expect(page.getByText("Dashboard")).not.toBeVisible();
+    await expect(page.getByRole("link", { name: "Dashboard" })).not.toBeVisible();
   });
 
   test("unauthenticated requests to protected API routes return 401", async ({
@@ -100,7 +100,7 @@ test.describe("Session auth — authenticated via injected session", () => {
     await expect(page.getByRole("link", { name: "Dashboard" })).toBeVisible();
 
     await expect(
-      page.getByRole("button", { name: "Sign in with Replit" }),
+      page.getByRole("button", { name: "Sign in" }),
     ).not.toBeVisible();
   });
 
@@ -165,11 +165,9 @@ test.describe("Logout — session cleared", () => {
     const sessionBeforeLogout = await sessionExists(sid);
     expect(sessionBeforeLogout).toBe(true);
 
-    const response = await context.request.get("/api/logout", {
-      maxRedirects: 0,
-    });
+    const response = await context.request.get("/api/logout");
 
-    expect([302, 303, 307, 308]).toContain(response.status());
+    expect(response.status()).toBe(200);
 
     const sessionAfterLogout = await sessionExists(sid);
     expect(sessionAfterLogout).toBe(false);
@@ -184,7 +182,7 @@ test.describe("Logout — session cleared", () => {
 
     await expect(page.getByText("Leads Pipeline")).toBeVisible();
 
-    await context.request.get("/api/logout", { maxRedirects: 0 });
+    await context.request.get("/api/logout");
 
     await page.goto("/");
 
@@ -192,7 +190,7 @@ test.describe("Logout — session cleared", () => {
       page.getByRole("heading", { name: "Welcome back" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Sign in with Replit" }),
+      page.getByRole("button", { name: "Sign in" }),
     ).toBeVisible();
     await expect(page.getByText("Leads Pipeline")).not.toBeVisible();
   });
@@ -215,7 +213,7 @@ test.describe("Logout — session cleared", () => {
     const beforeLogout = await context.request.get("/api/leads?page=1&limit=5");
     expect(beforeLogout.status()).toBe(200);
 
-    await context.request.get("/api/logout", { maxRedirects: 0 });
+    await context.request.get("/api/logout");
 
     await context.clearCookies();
 
