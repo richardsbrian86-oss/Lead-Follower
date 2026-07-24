@@ -3,7 +3,7 @@ import { gymsTable } from "./gyms.js";
 
 export const sequenceTemplatesTable = pgTable("sequence_templates", {
   id: serial("id").primaryKey(),
-  gymId: varchar("gym_id").references(() => gymsTable.id),
+  gymId: varchar("gym_id").notNull().references(() => gymsTable.id),
   step: integer("step").notNull(),
   delayDays: integer("delay_days").notNull(),
   toneInstruction: text("tone_instruction").notNull(),

@@ -8,7 +8,7 @@ export const leadSequencesTable = pgTable("lead_sequences", {
     .notNull()
     .unique()
     .references(() => leadsTable.id, { onDelete: "cascade" }),
-  gymId: varchar("gym_id").references(() => gymsTable.id),
+  gymId: varchar("gym_id").notNull().references(() => gymsTable.id),
   currentStep: integer("current_step").notNull().default(0),
   paused: boolean("paused").notNull().default(false),
   cancelled: boolean("cancelled").notNull().default(false),

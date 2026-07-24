@@ -8,6 +8,7 @@ export const sessionsTable = pgTable(
     sid: varchar("sid").primaryKey(),
     sess: jsonb("sess").notNull(),
     expire: timestamp("expire").notNull(),
+    gymId: varchar("gym_id").references(() => gymsTable.id),
   },
   (table) => [index("IDX_session_expire").on(table.expire)],
 );

@@ -97,7 +97,7 @@ router.post("/leads", async (req, res): Promise<void> => {
     note: "Lead added to system",
   });
 
-  await createSequenceForLead(lead.id, lead.visitDate).catch((err) => {
+  await createSequenceForLead(lead.id, lead.visitDate, lead.gymId).catch((err) => {
     console.error("Failed to create sequence for lead", lead.id, err);
   });
 

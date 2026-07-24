@@ -13,7 +13,7 @@ export const leadStatusEnum = pgEnum("lead_status", [
 
 export const leadsTable = pgTable("leads", {
   id: serial("id").primaryKey(),
-  gymId: varchar("gym_id").references(() => gymsTable.id),
+  gymId: varchar("gym_id").notNull().references(() => gymsTable.id),
   name: text("name").notNull(),
   email: text("email").notNull(),
   phone: text("phone").notNull(),

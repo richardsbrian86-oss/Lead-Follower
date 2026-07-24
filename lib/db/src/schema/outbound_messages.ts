@@ -10,7 +10,7 @@ export const outboundMessagesTable = pgTable("outbound_messages", {
   leadId: integer("lead_id")
     .notNull()
     .references(() => leadsTable.id, { onDelete: "cascade" }),
-  gymId: varchar("gym_id").references(() => gymsTable.id),
+  gymId: varchar("gym_id").notNull().references(() => gymsTable.id),
   channel: outboundChannelEnum("channel").notNull(),
   subject: text("subject"),
   body: text("body").notNull(),

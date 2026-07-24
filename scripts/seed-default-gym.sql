@@ -1,5 +1,5 @@
 -- Seed script: insert the default gym and backfill all tenant-scoped tables.
--- Safe to run multiple times (idempotent via ON CONFLICT DO NOTHING / WHERE IS NULL).
+-- Safe to run multiple times (idempotent via ON CONFLICT / WHERE conditions).
 
 -- 1. Insert default gym
 INSERT INTO gyms (id, name, slug, created_at, updated_at)
@@ -34,3 +34,38 @@ UPDATE outbound_messages om
   FROM leads l
  WHERE om.lead_id = l.id
    AND om.gym_id IS NULL;
+
+-- 7. Add nullable gym_id column to sessions (safe if already exists)
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS gym_id varchar REFERENCES gyms(id);
+
+-- 8. Backfill sessions.gym_id from JSONB session data
+UPDATE sessions
+   SET gym_id = sess->'user'->>'gymId'
+ WHERE gym_id IS NULL
+   AND sess->'user'->>'gymId' IS NOT NULL;
+
+-- 9. Auto-populate sessions.gym_id on future inserts/updates via trigger
+CREATE OR REPLACE FUNCTION sessions_set_gym_id()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.gym_id := NEW.sess->'user'->>'gymId';
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS sessions_gym_id_trigger ON sessions;
+CREATE TRIGGER sessions_gym_id_trigger
+  BEFORE INSERT OR UPDATE ON sessions
+  FOR EACH ROW EXECUTE FUNCTION sessions_set_gym_id();
+
+-- 10. Enforce NOT NULL on fully-backfilled tenant business tables
+--     (run only after all rows have been backfilled above)
+ALTER TABLE leads              ALTER COLUMN gym_id SET NOT NULL;
+ALTER TABLE lead_sequences     ALTER COLUMN gym_id SET NOT NULL;
+ALTER TABLE sequence_templates ALTER COLUMN gym_id SET NOT NULL;
+ALTER TABLE outbound_messages  ALTER COLUMN gym_id SET NOT NULL;
+
+-- 11. Ensure composite unique index on sequence_templates (step, gym_id)
+ALTER TABLE sequence_templates DROP CONSTRAINT IF EXISTS sequence_templates_step_key;
+ALTER TABLE sequence_templates DROP CONSTRAINT IF EXISTS sequence_templates_gym_step_unique;
+ALTER TABLE sequence_templates ADD CONSTRAINT sequence_templates_gym_step_unique UNIQUE (gym_id, step);
