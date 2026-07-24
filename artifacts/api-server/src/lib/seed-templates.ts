@@ -1,6 +1,8 @@
-import { db, sequenceTemplatesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, sequenceTemplatesTable, gymsTable } from "@workspace/db";
+import { and, eq } from "drizzle-orm";
 import { logger } from "./logger.js";
+
+const DEFAULT_GYM_ID = "00000000-0000-0000-0000-000000000001";
 
 const DEFAULT_TEMPLATES = [
   {
@@ -26,15 +28,26 @@ const DEFAULT_TEMPLATES = [
 ];
 
 export async function seedSequenceTemplates(): Promise<void> {
+  // Ensure the default gym row exists before inserting templates that FK to it
+  await db
+    .insert(gymsTable)
+    .values({ id: DEFAULT_GYM_ID, name: "Default Gym", slug: "default" })
+    .onConflictDoNothing();
+
   for (const tmpl of DEFAULT_TEMPLATES) {
     const existing = await db
       .select()
       .from(sequenceTemplatesTable)
-      .where(eq(sequenceTemplatesTable.step, tmpl.step));
+      .where(
+        and(
+          eq(sequenceTemplatesTable.gymId, DEFAULT_GYM_ID),
+          eq(sequenceTemplatesTable.step, tmpl.step),
+        ),
+      );
 
     if (existing.length === 0) {
-      await db.insert(sequenceTemplatesTable).values(tmpl);
-      logger.info({ step: tmpl.step }, "Seeded sequence template");
+      await db.insert(sequenceTemplatesTable).values({ ...tmpl, gymId: DEFAULT_GYM_ID });
+      logger.info({ step: tmpl.step, gymId: DEFAULT_GYM_ID }, "Seeded sequence template");
     }
   }
 }

@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { leadsTable, leadEventsTable } from "./schema/leads.js";
+import { gymsTable } from "./schema/gyms.js";
 import { sql } from "drizzle-orm";
 
 const { Pool } = pg;
@@ -12,94 +13,33 @@ if (!process.env.DATABASE_URL) {
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const db = drizzle(pool);
 
+const DEFAULT_GYM_ID = "00000000-0000-0000-0000-000000000001";
+
 const now = new Date();
 const daysAgo = (n: number) => new Date(now.getTime() - n * 24 * 60 * 60 * 1000);
 
 const leads = [
-  {
-    name: "Marcus Johnson",
-    email: "marcus.johnson@email.com",
-    phone: "555-0101",
-    visitDate: daysAgo(1),
-    status: "new" as const,
-    notes: "Interested in personal training packages. Referred by a friend.",
-  },
-  {
-    name: "Aaliyah Thompson",
-    email: "aaliyah.t@gmail.com",
-    phone: "555-0102",
-    visitDate: daysAgo(2),
-    status: "new" as const,
-    notes: "Wants a 6am class schedule. Evaluating 3 gyms.",
-  },
-  {
-    name: "Priya Sharma",
-    email: "priya.sharma@outlook.com",
-    phone: "555-0103",
-    visitDate: daysAgo(3),
-    status: "contacted" as const,
-    notes: "Left voicemail. Interested in family plan.",
-  },
-  {
-    name: "Nadia Okafor",
-    email: "nadia.okafor@email.com",
-    phone: "555-0104",
-    visitDate: daysAgo(4),
-    status: "interested" as const,
-    notes: "Wants to see pricing for annual membership.",
-  },
-  {
-    name: "Derek Williams",
-    email: "derek.w@gmail.com",
-    phone: "555-0105",
-    visitDate: daysAgo(5),
-    status: "interested" as const,
-    notes: "Very keen on group fitness classes. Needs childcare options.",
-  },
-  {
-    name: "Sofia Reyes",
-    email: "sofia.reyes@email.com",
-    phone: "555-0106",
-    visitDate: daysAgo(10),
-    status: "won" as const,
-    notes: "Signed up for 12-month premium plan.",
-  },
-  {
-    name: "James Park",
-    email: "james.park@email.com",
-    phone: "555-0107",
-    visitDate: daysAgo(12),
-    status: "lost" as const,
-    notes: "Chose competitor gym closer to home.",
-  },
-  {
-    name: "Elena Vasquez",
-    email: "elena.v@gmail.com",
-    phone: "555-0108",
-    visitDate: daysAgo(14),
-    status: "won" as const,
-    notes: "Enrolled in bootcamp program plus monthly membership.",
-  },
-  {
-    name: "Brian Nguyen",
-    email: "brian.nguyen@email.com",
-    phone: "555-0109",
-    visitDate: daysAgo(16),
-    status: "contacted" as const,
-    notes: "Replied to email. Scheduling a second tour.",
-  },
-  {
-    name: "Camille Dubois",
-    email: "camille.d@outlook.com",
-    phone: "555-0110",
-    visitDate: daysAgo(20),
-    status: "contacted" as const,
-    notes: "Asked about senior discount. Following up next week.",
-  },
+  { gymId: DEFAULT_GYM_ID, name: "Marcus Johnson",  email: "marcus.johnson@email.com",  phone: "555-0101", visitDate: daysAgo(1),  status: "new"       as const, notes: "Interested in personal training packages. Referred by a friend." },
+  { gymId: DEFAULT_GYM_ID, name: "Aaliyah Thompson", email: "aaliyah.t@gmail.com",        phone: "555-0102", visitDate: daysAgo(2),  status: "new"       as const, notes: "Wants a 6am class schedule. Evaluating 3 gyms." },
+  { gymId: DEFAULT_GYM_ID, name: "Priya Sharma",    email: "priya.sharma@outlook.com",   phone: "555-0103", visitDate: daysAgo(3),  status: "contacted" as const, notes: "Left voicemail. Interested in family plan." },
+  { gymId: DEFAULT_GYM_ID, name: "Nadia Okafor",    email: "nadia.okafor@email.com",     phone: "555-0104", visitDate: daysAgo(4),  status: "interested" as const, notes: "Wants to see pricing for annual membership." },
+  { gymId: DEFAULT_GYM_ID, name: "Derek Williams",  email: "derek.w@gmail.com",           phone: "555-0105", visitDate: daysAgo(5),  status: "interested" as const, notes: "Very keen on group fitness classes. Needs childcare options." },
+  { gymId: DEFAULT_GYM_ID, name: "Sofia Reyes",     email: "sofia.reyes@email.com",       phone: "555-0106", visitDate: daysAgo(10), status: "won"       as const, notes: "Signed up for 12-month premium plan." },
+  { gymId: DEFAULT_GYM_ID, name: "James Park",      email: "james.park@email.com",        phone: "555-0107", visitDate: daysAgo(12), status: "lost"      as const, notes: "Chose competitor gym closer to home." },
+  { gymId: DEFAULT_GYM_ID, name: "Elena Vasquez",   email: "elena.v@gmail.com",           phone: "555-0108", visitDate: daysAgo(14), status: "won"       as const, notes: "Enrolled in bootcamp program plus monthly membership." },
+  { gymId: DEFAULT_GYM_ID, name: "Brian Nguyen",    email: "brian.nguyen@email.com",      phone: "555-0109", visitDate: daysAgo(16), status: "contacted" as const, notes: "Replied to email. Scheduling a second tour." },
+  { gymId: DEFAULT_GYM_ID, name: "Camille Dubois",  email: "camille.d@outlook.com",       phone: "555-0110", visitDate: daysAgo(20), status: "contacted" as const, notes: "Asked about senior discount. Following up next week." },
 ];
 
 async function seed() {
   console.log("Seeding database...");
+
+  // Ensure default gym exists before inserting FK-dependent rows
+  await db
+    .insert(gymsTable)
+    .values({ id: DEFAULT_GYM_ID, name: "Default Gym", slug: "default" })
+    .onConflictDoNothing();
+  console.log("Default gym ready.");
 
   await db.execute(sql`TRUNCATE TABLE lead_events, leads RESTART IDENTITY CASCADE`);
   console.log("Cleared existing data.");
@@ -107,7 +47,7 @@ async function seed() {
   const inserted = await db.insert(leadsTable).values(leads).returning();
   console.log(`Inserted ${inserted.length} leads.`);
 
-  const events = [];
+  const events: Array<{ leadId: number; type: string; note: string; createdAt: Date }> = [];
 
   for (const lead of inserted) {
     events.push({
