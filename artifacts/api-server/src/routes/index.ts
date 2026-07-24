@@ -22,7 +22,7 @@ const router: IRouter = Router();
 //   POST /auth/reset-password            — sets a new password via reset token
 //   GET  /logout                         — clears the session cookie, returns JSON
 //
-// Every other /api/* route is protected by requireAuth below.
+// Every other /api/* route is protected by requireAuth + requireGym below.
 // ─────────────────────────────────────────────────────────────────────────────
 router.use(healthRouter);
 router.use(authRouter);
@@ -36,7 +36,18 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+// All business routes require a gym — protects against users who registered but
+// haven't been assigned to a gym yet (e.g. during owner onboarding flow).
+function requireGym(req: Request, res: Response, next: NextFunction) {
+  if (!req.user?.gymId) {
+    res.status(403).json({ error: "No gym assigned to your account. Contact your administrator." });
+    return;
+  }
+  next();
+}
+
 router.use(requireAuth as (req: Request, res: Response, next: NextFunction) => void);
+router.use(requireGym as (req: Request, res: Response, next: NextFunction) => void);
 
 router.use(leadsRouter);
 router.use(messagingRouter);

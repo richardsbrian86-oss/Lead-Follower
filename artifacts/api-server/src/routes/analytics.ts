@@ -1,11 +1,11 @@
 import { Router, type IRouter } from "express";
-import { count, sql } from "drizzle-orm";
+import { count, sql, eq } from "drizzle-orm";
 import { db, leadsTable } from "@workspace/db";
 import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
 
-async function fetchAllAnalyticsData() {
+async function fetchAllAnalyticsData(gymId: string) {
   const [pulseResult, funnelRows, trendResult, scoreResult, seqResult] = await Promise.all([
     // Pulse
     (async () => {
@@ -14,11 +14,11 @@ async function fetchAllAnalyticsData() {
       const last30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
       const [r7d, r30d, rScore, rVelocity, rActive] = await Promise.all([
-        db.execute(sql`SELECT COUNT(*)::int AS total, COUNT(CASE WHEN status = 'won' THEN 1 END)::int AS won FROM leads WHERE created_at >= ${last7.toISOString()}`),
-        db.execute(sql`SELECT COUNT(*)::int AS total, COUNT(CASE WHEN status = 'won' THEN 1 END)::int AS won FROM leads WHERE created_at >= ${last30.toISOString()}`),
-        db.execute(sql`SELECT COALESCE(AVG(score), 0) AS avg_score FROM leads`),
-        db.execute(sql`SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 86400), 0) AS avg_days FROM leads WHERE status = 'won'`),
-        db.execute(sql`SELECT COUNT(*)::int AS cnt FROM leads WHERE status NOT IN ('won', 'lost')`),
+        db.execute(sql`SELECT COUNT(*)::int AS total, COUNT(CASE WHEN status = 'won' THEN 1 END)::int AS won FROM leads WHERE gym_id = ${gymId} AND created_at >= ${last7.toISOString()}`),
+        db.execute(sql`SELECT COUNT(*)::int AS total, COUNT(CASE WHEN status = 'won' THEN 1 END)::int AS won FROM leads WHERE gym_id = ${gymId} AND created_at >= ${last30.toISOString()}`),
+        db.execute(sql`SELECT COALESCE(AVG(score), 0) AS avg_score FROM leads WHERE gym_id = ${gymId}`),
+        db.execute(sql`SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 86400), 0) AS avg_days FROM leads WHERE gym_id = ${gymId} AND status = 'won'`),
+        db.execute(sql`SELECT COUNT(*)::int AS cnt FROM leads WHERE gym_id = ${gymId} AND status NOT IN ('won', 'lost')`),
       ]);
 
       const c7 = r7d.rows[0] as { total: string | number; won: string | number } | undefined;
@@ -36,7 +36,10 @@ async function fetchAllAnalyticsData() {
     })(),
 
     // Pipeline funnel
-    db.select({ status: leadsTable.status, count: count() }).from(leadsTable).groupBy(leadsTable.status),
+    db.select({ status: leadsTable.status, count: count() })
+      .from(leadsTable)
+      .where(eq(leadsTable.gymId, gymId))
+      .groupBy(leadsTable.status),
 
     // Conversion trend
     db.execute(sql`
@@ -46,7 +49,7 @@ async function fetchAllAnalyticsData() {
       SELECT to_char(w.week_start, 'YYYY-MM-DD') AS "weekStart", COUNT(l.id)::int AS total,
         COUNT(CASE WHEN l.status = 'won' THEN 1 END)::int AS won,
         CASE WHEN COUNT(l.id) = 0 THEN 0 ELSE ROUND(COUNT(CASE WHEN l.status = 'won' THEN 1 END)::numeric / COUNT(l.id) * 100, 1) END AS rate
-      FROM weeks w LEFT JOIN leads l ON date_trunc('week', l.created_at) = w.week_start
+      FROM weeks w LEFT JOIN leads l ON date_trunc('week', l.created_at) = w.week_start AND l.gym_id = ${gymId}
       GROUP BY w.week_start ORDER BY w.week_start
     `),
 
@@ -55,7 +58,7 @@ async function fetchAllAnalyticsData() {
       SELECT CASE WHEN score BETWEEN 0 AND 19 THEN '0–19' WHEN score BETWEEN 20 AND 39 THEN '20–39'
         WHEN score BETWEEN 40 AND 59 THEN '40–59' WHEN score BETWEEN 60 AND 79 THEN '60–79'
         WHEN score BETWEEN 80 AND 100 THEN '80–100' END AS label, COUNT(*)::int AS count
-      FROM leads GROUP BY label
+      FROM leads WHERE gym_id = ${gymId} GROUP BY label
     `),
 
     // Sequence funnel
@@ -64,7 +67,7 @@ async function fetchAllAnalyticsData() {
         COUNT(DISTINCT CASE WHEN l.status = 'won' THEN ls.lead_id END)::int AS "convertedAfter"
       FROM (VALUES (1),(2),(3),(4)) AS s(step_num)
       LEFT JOIN lead_sequences ls ON ls.current_step >= s.step_num
-      LEFT JOIN leads l ON l.id = ls.lead_id
+      LEFT JOIN leads l ON l.id = ls.lead_id AND l.gym_id = ${gymId}
       GROUP BY s.step_num ORDER BY s.step_num
     `),
   ]);
@@ -96,8 +99,9 @@ async function fetchAllAnalyticsData() {
   return { pulse: pulseResult, stages, weeks, buckets, steps };
 }
 
-router.get("/analytics/conversion-trend", async (_req, res): Promise<void> => {
+router.get("/analytics/conversion-trend", async (req, res): Promise<void> => {
   try {
+    const gymId = req.user!.gymId!;
     const result = await db.execute(sql`
       WITH weeks AS (
         SELECT generate_series(
@@ -116,7 +120,7 @@ router.get("/analytics/conversion-trend", async (_req, res): Promise<void> => {
         END AS rate
       FROM weeks w
       LEFT JOIN leads l
-        ON date_trunc('week', l.created_at) = w.week_start
+        ON date_trunc('week', l.created_at) = w.week_start AND l.gym_id = ${gymId}
       GROUP BY w.week_start
       ORDER BY w.week_start
     `);
@@ -136,8 +140,9 @@ router.get("/analytics/conversion-trend", async (_req, res): Promise<void> => {
   }
 });
 
-router.get("/analytics/pipeline-funnel", async (_req, res): Promise<void> => {
+router.get("/analytics/pipeline-funnel", async (req, res): Promise<void> => {
   try {
+    const gymId = req.user!.gymId!;
     const statusOrder = ["new", "contacted", "interested", "won", "lost"] as const;
     const statusLabels: Record<string, string> = {
       new: "New",
@@ -150,6 +155,7 @@ router.get("/analytics/pipeline-funnel", async (_req, res): Promise<void> => {
     const rows = await db
       .select({ status: leadsTable.status, count: count() })
       .from(leadsTable)
+      .where(eq(leadsTable.gymId, gymId))
       .groupBy(leadsTable.status);
 
     const countMap: Record<string, number> = {};
@@ -170,8 +176,9 @@ router.get("/analytics/pipeline-funnel", async (_req, res): Promise<void> => {
   }
 });
 
-router.get("/analytics/sequence-funnel", async (_req, res): Promise<void> => {
+router.get("/analytics/sequence-funnel", async (req, res): Promise<void> => {
   try {
+    const gymId = req.user!.gymId!;
     const stepLabels: Record<number, string> = {
       1: "Step 1 – Outreach",
       2: "Step 2 – Follow-Up",
@@ -188,7 +195,7 @@ router.get("/analytics/sequence-funnel", async (_req, res): Promise<void> => {
       LEFT JOIN lead_sequences ls
         ON ls.current_step >= s.step_num
       LEFT JOIN leads l
-        ON l.id = ls.lead_id
+        ON l.id = ls.lead_id AND l.gym_id = ${gymId}
       GROUP BY s.step_num
       ORDER BY s.step_num
     `);
@@ -208,8 +215,9 @@ router.get("/analytics/sequence-funnel", async (_req, res): Promise<void> => {
   }
 });
 
-router.get("/analytics/score-distribution", async (_req, res): Promise<void> => {
+router.get("/analytics/score-distribution", async (req, res): Promise<void> => {
   try {
+    const gymId = req.user!.gymId!;
     const bucketDefs = [
       { label: "0–19", min: 0, max: 19 },
       { label: "20–39", min: 20, max: 39 },
@@ -228,7 +236,7 @@ router.get("/analytics/score-distribution", async (_req, res): Promise<void> => 
           WHEN score BETWEEN 80 AND 100 THEN '80–100'
         END AS label,
         COUNT(*)::int AS count
-      FROM leads
+      FROM leads WHERE gym_id = ${gymId}
       GROUP BY label
     `);
 
@@ -250,34 +258,35 @@ router.get("/analytics/score-distribution", async (_req, res): Promise<void> => 
   }
 });
 
-router.get("/analytics/pulse", async (_req, res): Promise<void> => {
+router.get("/analytics/pulse", async (req, res): Promise<void> => {
   try {
+    const gymId = req.user!.gymId!;
     const now = new Date();
     const last7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const last30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     const result7d = await db.execute(sql`
       SELECT COUNT(*)::int AS total, COUNT(CASE WHEN status = 'won' THEN 1 END)::int AS won
-      FROM leads WHERE created_at >= ${last7.toISOString()}
+      FROM leads WHERE gym_id = ${gymId} AND created_at >= ${last7.toISOString()}
     `);
     const counts7d = result7d.rows[0] as { total: string | number; won: string | number } | undefined;
 
     const result30d = await db.execute(sql`
       SELECT COUNT(*)::int AS total, COUNT(CASE WHEN status = 'won' THEN 1 END)::int AS won
-      FROM leads WHERE created_at >= ${last30.toISOString()}
+      FROM leads WHERE gym_id = ${gymId} AND created_at >= ${last30.toISOString()}
     `);
     const counts30d = result30d.rows[0] as { total: string | number; won: string | number } | undefined;
 
-    const scoreResult = await db.execute(sql`SELECT COALESCE(AVG(score), 0) AS avg_score FROM leads`);
+    const scoreResult = await db.execute(sql`SELECT COALESCE(AVG(score), 0) AS avg_score FROM leads WHERE gym_id = ${gymId}`);
     const scoreRow = scoreResult.rows[0] as { avg_score: string | number } | undefined;
 
     const velocityResult = await db.execute(sql`
       SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 86400), 0) AS avg_days
-      FROM leads WHERE status = 'won'
+      FROM leads WHERE gym_id = ${gymId} AND status = 'won'
     `);
     const velocityRow = velocityResult.rows[0] as { avg_days: string | number } | undefined;
 
-    const activeResult = await db.execute(sql`SELECT COUNT(*)::int AS cnt FROM leads WHERE status NOT IN ('won', 'lost')`);
+    const activeResult = await db.execute(sql`SELECT COUNT(*)::int AS cnt FROM leads WHERE gym_id = ${gymId} AND status NOT IN ('won', 'lost')`);
     const activeRow = activeResult.rows[0] as { cnt: string | number } | undefined;
 
     const total7d = Number(counts7d?.total ?? 0);
@@ -304,8 +313,9 @@ router.post("/analytics/insights", async (req, res): Promise<void> => {
   res.setHeader("Connection", "keep-alive");
 
   try {
+    const gymId = req.user!.gymId!;
     const focus = req.body?.focus as string | undefined;
-    const data = await fetchAllAnalyticsData();
+    const data = await fetchAllAnalyticsData(gymId);
 
     const prompt = `You are an expert gym sales coach and CRM analyst. Analyze this lead pipeline data and provide 3-5 concise, actionable insights for the sales manager.
 

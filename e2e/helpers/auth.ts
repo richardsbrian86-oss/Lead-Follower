@@ -6,15 +6,18 @@ const BASE_URL = process.env.REPLIT_DEV_DOMAIN
   ? `https://${process.env.REPLIT_DEV_DOMAIN}`
   : "http://localhost:3000";
 
+const DEFAULT_GYM_ID = "00000000-0000-0000-0000-000000000001";
+
 /**
- * Register a user via the API, then flip email_verified=true directly in the
- * DB so tests that need a verified account can log in without touching email.
+ * Register a user via the API, then flip email_verified=true and assign the
+ * default gymId directly in the DB so tests can log in without touching email.
  * If the email already exists (409) we just verify it and move on.
  */
 export async function registerAndVerifyUser(
   email: string,
   password: string,
   name: string,
+  gymId: string = DEFAULT_GYM_ID,
 ): Promise<void> {
   const res = await fetch(`${BASE_URL}/api/auth/register`, {
     method: "POST",
@@ -34,9 +37,10 @@ export async function registerAndVerifyUser(
       `UPDATE users
          SET email_verified = true,
              verify_token   = null,
-             verify_token_expiry = null
+             verify_token_expiry = null,
+             gym_id = $2
        WHERE email = $1`,
-      [email.toLowerCase().trim()],
+      [email.toLowerCase().trim(), gymId],
     );
   } finally {
     await pool.end();
@@ -45,11 +49,13 @@ export async function registerAndVerifyUser(
 
 /**
  * Register an unverified user (no DB update — emailVerified stays false).
+ * Assigns the default gymId so the user has a valid gym on their account.
  */
 export async function registerUnverifiedUser(
   email: string,
   password: string,
   name: string,
+  gymId: string = DEFAULT_GYM_ID,
 ): Promise<void> {
   const res = await fetch(`${BASE_URL}/api/auth/register`, {
     method: "POST",
@@ -61,6 +67,16 @@ export async function registerUnverifiedUser(
     throw new Error(
       `registerUnverifiedUser: register request failed ${res.status}: ${await res.text()}`,
     );
+  }
+
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    await pool.query(
+      `UPDATE users SET gym_id = $2 WHERE email = $1 AND gym_id IS NULL`,
+      [email.toLowerCase().trim(), gymId],
+    );
+  } finally {
+    await pool.end();
   }
 }
 

@@ -46,6 +46,7 @@ function buildUserPayload(user: {
   email: string | null;
   name: string | null;
   role: string;
+  gymId: string | null;
   firstName: string | null;
   lastName: string | null;
   profileImageUrl: string | null;
@@ -55,6 +56,7 @@ function buildUserPayload(user: {
     email: user.email,
     name: user.name,
     role: user.role,
+    gymId: user.gymId ?? null,
     firstName: user.firstName,
     lastName: user.lastName,
     profileImageUrl: user.profileImageUrl,

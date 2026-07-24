@@ -1475,6 +1475,9 @@ components:
         role:
           type: string
           enum: [owner, staff]
+        gymId:
+          type: [string, 'null']
+          description: The gym this user belongs to. Null for users not yet assigned to a gym.
         firstName:
           type: [string, 'null']
         lastName:

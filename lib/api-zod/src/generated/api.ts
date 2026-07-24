@@ -631,6 +631,7 @@ export const GetCurrentAuthUserResponse = zod.object({
   "email": zod.string().email().nullable(),
   "name": zod.string().nullable(),
   "role": zod.enum(['owner', 'staff']),
+  "gymId": zod.string().nullish().describe('The gym this user belongs to. Null for users not yet assigned to a gym.'),
   "firstName": zod.string().nullable(),
   "lastName": zod.string().nullable(),
   "profileImageUrl": zod.string().nullable()
@@ -671,6 +672,7 @@ export const AuthLoginResponse = zod.object({
   "email": zod.string().email().nullable(),
   "name": zod.string().nullable(),
   "role": zod.enum(['owner', 'staff']),
+  "gymId": zod.string().nullish().describe('The gym this user belongs to. Null for users not yet assigned to a gym.'),
   "firstName": zod.string().nullable(),
   "lastName": zod.string().nullable(),
   "profileImageUrl": zod.string().nullable()

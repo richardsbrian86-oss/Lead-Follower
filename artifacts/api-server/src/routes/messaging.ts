@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { db, leadsTable, outboundMessagesTable } from "@workspace/db";
 import {
   GetLeadMessagesParams,
@@ -35,7 +35,10 @@ router.get("/leads/:id/messages", async (req, res): Promise<void> => {
     return;
   }
 
-  const [lead] = await db.select().from(leadsTable).where(eq(leadsTable.id, params.data.id));
+  const gymId = req.user!.gymId!;
+  const [lead] = await db.select().from(leadsTable).where(
+    and(eq(leadsTable.id, params.data.id), eq(leadsTable.gymId, gymId))
+  );
   if (!lead) {
     res.status(404).json({ error: "Lead not found" });
     return;
@@ -62,7 +65,10 @@ router.post("/leads/:id/messages/draft", async (req, res): Promise<void> => {
     return;
   }
 
-  const [lead] = await db.select().from(leadsTable).where(eq(leadsTable.id, params.data.id));
+  const gymId = req.user!.gymId!;
+  const [lead] = await db.select().from(leadsTable).where(
+    and(eq(leadsTable.id, params.data.id), eq(leadsTable.gymId, gymId))
+  );
   if (!lead) {
     res.status(404).json({ error: "Lead not found" });
     return;
@@ -97,7 +103,10 @@ router.post("/leads/:id/messages/send", async (req, res): Promise<void> => {
     return;
   }
 
-  const [lead] = await db.select().from(leadsTable).where(eq(leadsTable.id, params.data.id));
+  const gymId = req.user!.gymId!;
+  const [lead] = await db.select().from(leadsTable).where(
+    and(eq(leadsTable.id, params.data.id), eq(leadsTable.gymId, gymId))
+  );
   if (!lead) {
     res.status(404).json({ error: "Lead not found" });
     return;
@@ -135,7 +144,6 @@ router.post("/leads/:id/messages/send", async (req, res): Promise<void> => {
     .from(outboundMessagesTable)
     .where(eq(outboundMessagesTable.id, msg.id));
 
-  // Recompute score after message sent (affects outreach engagement factor)
   await recomputeAndSaveScore(lead.id).catch((err) =>
     logger.error({ err, leadId: lead.id }, "Failed to recompute score after message send"),
   );

@@ -1,6 +1,7 @@
-import { pgTable, text, serial, integer, timestamp, pgEnum, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, varchar, timestamp, pgEnum, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { gymsTable } from "./gyms.js";
 
 export const leadStatusEnum = pgEnum("lead_status", [
   "new",
@@ -12,6 +13,7 @@ export const leadStatusEnum = pgEnum("lead_status", [
 
 export const leadsTable = pgTable("leads", {
   id: serial("id").primaryKey(),
+  gymId: varchar("gym_id").references(() => gymsTable.id),
   name: text("name").notNull(),
   email: text("email").notNull(),
   phone: text("phone").notNull(),
@@ -45,7 +47,7 @@ export const insertLeadSchema = createInsertSchema(leadsTable, {
   phone: z.string().min(7),
   name: z.string().min(1),
   visitDate: z.string(),
-}).omit({ id: true, createdAt: true, updatedAt: true });
+}).omit({ id: true, gymId: true, createdAt: true, updatedAt: true });
 
 export const updateLeadSchema = createSelectSchema(leadsTable, {
   visitDate: z.string(),

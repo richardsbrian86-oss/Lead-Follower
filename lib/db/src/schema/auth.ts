@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { boolean, index, jsonb, pgTable, timestamp, varchar } from "drizzle-orm/pg-core";
+import { gymsTable } from "./gyms.js";
 
 export const sessionsTable = pgTable(
   "sessions",
@@ -16,6 +17,7 @@ export const usersTable = pgTable("users", {
   email: varchar("email").unique(),
   name: varchar("name"),
   role: varchar("role").notNull().default("staff"),
+  gymId: varchar("gym_id").references(() => gymsTable.id),
   passwordHash: varchar("password_hash"),
   emailVerified: boolean("email_verified").notNull().default(false),
   verifyToken: varchar("verify_token"),

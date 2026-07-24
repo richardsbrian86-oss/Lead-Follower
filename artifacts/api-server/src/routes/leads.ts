@@ -53,8 +53,9 @@ router.get("/leads", async (req, res): Promise<void> => {
   }
 
   const { status, search } = query.data;
+  const gymId = req.user!.gymId!;
 
-  const conditions = [];
+  const conditions = [eq(leadsTable.gymId, gymId)];
   if (status) {
     conditions.push(eq(leadsTable.status, status));
   }
@@ -63,14 +64,14 @@ router.get("/leads", async (req, res): Promise<void> => {
       or(
         ilike(leadsTable.name, `%${search}%`),
         ilike(leadsTable.email, `%${search}%`),
-      ),
+      )!,
     );
   }
 
   const leads = await db
     .select()
     .from(leadsTable)
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(desc(leadsTable.createdAt));
 
   res.json(ListLeadsResponse.parse(leads.map(serializeLead)));
@@ -83,10 +84,11 @@ router.post("/leads", async (req, res): Promise<void> => {
     return;
   }
 
+  const gymId = req.user!.gymId!;
   const { visitDate, ...rest } = parsed.data;
   const [lead] = await db
     .insert(leadsTable)
-    .values({ ...rest, visitDate: new Date(visitDate) })
+    .values({ ...rest, gymId, visitDate: new Date(visitDate) })
     .returning();
 
   await db.insert(leadEventsTable).values({
@@ -95,12 +97,10 @@ router.post("/leads", async (req, res): Promise<void> => {
     note: "Lead added to system",
   });
 
-  // Start automated follow-up sequence
   await createSequenceForLead(lead.id, lead.visitDate).catch((err) => {
     console.error("Failed to create sequence for lead", lead.id, err);
   });
 
-  // Compute initial score
   await recomputeAndSaveScore(lead.id).catch((err) =>
     logger.error({ err, leadId: lead.id }, "Failed to compute initial score for new lead"),
   );
@@ -115,10 +115,11 @@ router.get("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const gymId = req.user!.gymId!;
   const [lead] = await db
     .select()
     .from(leadsTable)
-    .where(eq(leadsTable.id, params.data.id));
+    .where(and(eq(leadsTable.id, params.data.id), eq(leadsTable.gymId, gymId)));
 
   if (!lead) {
     res.status(404).json({ error: "Lead not found" });
@@ -147,17 +148,18 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const { visitDate, status, ...rest } = parsed.data;
-
+  const gymId = req.user!.gymId!;
   const [existing] = await db
     .select()
     .from(leadsTable)
-    .where(eq(leadsTable.id, params.data.id));
+    .where(and(eq(leadsTable.id, params.data.id), eq(leadsTable.gymId, gymId)));
 
   if (!existing) {
     res.status(404).json({ error: "Lead not found" });
     return;
   }
+
+  const { visitDate, status, ...rest } = parsed.data;
 
   const updateData: Record<string, unknown> = {
     ...rest,
@@ -183,7 +185,6 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
       note: `Status changed from ${existing.status} to ${status}`,
     });
 
-    // Auto-cancel follow-up sequence when lead is Won or Lost
     if (status === "won" || status === "lost") {
       await db
         .update(leadSequencesTable)
@@ -197,7 +198,6 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     }
   }
 
-  // Recompute score after any update
   await recomputeAndSaveScore(lead.id).catch((err) =>
     logger.error({ err, leadId: lead.id }, "Failed to recompute score after lead update"),
   );
@@ -213,9 +213,10 @@ router.delete("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const gymId = req.user!.gymId!;
   const [lead] = await db
     .delete(leadsTable)
-    .where(eq(leadsTable.id, params.data.id))
+    .where(and(eq(leadsTable.id, params.data.id), eq(leadsTable.gymId, gymId)))
     .returning();
 
   if (!lead) {
@@ -239,10 +240,11 @@ router.post("/leads/:id/events", async (req, res): Promise<void> => {
     return;
   }
 
+  const gymId = req.user!.gymId!;
   const [lead] = await db
     .select()
     .from(leadsTable)
-    .where(eq(leadsTable.id, params.data.id));
+    .where(and(eq(leadsTable.id, params.data.id), eq(leadsTable.gymId, gymId)));
 
   if (!lead) {
     res.status(404).json({ error: "Lead not found" });
@@ -254,7 +256,6 @@ router.post("/leads/:id/events", async (req, res): Promise<void> => {
     .values({ leadId: params.data.id, ...parsed.data })
     .returning();
 
-  // Recompute score after new activity
   await recomputeAndSaveScore(params.data.id).catch((err) =>
     logger.error({ err, leadId: params.data.id }, "Failed to recompute score after event creation"),
   );
@@ -269,7 +270,10 @@ router.get("/leads/:id/score", async (req, res): Promise<void> => {
     return;
   }
 
-  const [lead] = await db.select().from(leadsTable).where(eq(leadsTable.id, params.data.id));
+  const gymId = req.user!.gymId!;
+  const [lead] = await db.select().from(leadsTable).where(
+    and(eq(leadsTable.id, params.data.id), eq(leadsTable.gymId, gymId))
+  );
   if (!lead) {
     res.status(404).json({ error: "Lead not found" });
     return;
@@ -279,13 +283,16 @@ router.get("/leads/:id/score", async (req, res): Promise<void> => {
   res.json(GetLeadScoreResponse.parse({ score: result.score, factors: result.factors }));
 });
 
-router.get("/dashboard/summary", async (_req, res): Promise<void> => {
+router.get("/dashboard/summary", async (req, res): Promise<void> => {
+  const gymId = req.user!.gymId!;
+
   const statusCounts = await db
     .select({
       status: leadsTable.status,
       count: count(),
     })
     .from(leadsTable)
+    .where(eq(leadsTable.gymId, gymId))
     .groupBy(leadsTable.status);
 
   const counts = {
@@ -313,6 +320,7 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
     .from(leadsTable)
     .where(
       and(
+        eq(leadsTable.gymId, gymId),
         sql`${leadsTable.status} IN ('new', 'contacted')`,
         sql`${leadsTable.visitDate} <= ${followUpThreshold.toISOString()}`,
       ),
@@ -321,13 +329,14 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
   const recentLeads = await db
     .select()
     .from(leadsTable)
+    .where(eq(leadsTable.gymId, gymId))
     .orderBy(desc(leadsTable.createdAt))
     .limit(5);
 
   const hotLeads = await db
     .select()
     .from(leadsTable)
-    .where(notInArray(leadsTable.status, ["won", "lost"]))
+    .where(and(eq(leadsTable.gymId, gymId), notInArray(leadsTable.status, ["won", "lost"])))
     .orderBy(desc(leadsTable.score))
     .limit(5);
 
@@ -347,22 +356,24 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
   res.json(GetDashboardSummaryResponse.parse(summary));
 });
 
-router.get("/dashboard/action-queue", async (_req, res): Promise<void> => {
+router.get("/dashboard/action-queue", async (req, res): Promise<void> => {
+  const gymId = req.user!.gymId!;
   const now = new Date();
-  // Overdue follow-up threshold: 3 days since visit without conversion (mirrors followUpsDueToday)
   const followUpThreshold = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
-  // Sequence step "due" window: any step whose nextSendAt is at or before now+24h
   const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
   const ago7days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const ago14days = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
-  // Fetch active leads (exclude won/lost)
   const activeLeads = await db
     .select()
     .from(leadsTable)
-    .where(sql`${leadsTable.status} NOT IN ('won', 'lost')`);
+    .where(
+      and(
+        eq(leadsTable.gymId, gymId),
+        sql`${leadsTable.status} NOT IN ('won', 'lost')`,
+      )
+    );
 
-  // Fetch all active (non-paused, non-cancelled) sequences
   const sequences = await db
     .select()
     .from(leadSequencesTable)
@@ -375,7 +386,6 @@ router.get("/dashboard/action-queue", async (_req, res): Promise<void> => {
 
   const seqByLeadId = new Map(sequences.map((s) => [s.leadId, s]));
 
-  // Most recent event per lead (for stale-contact calculation)
   const recentEventRows = await db
     .select({
       leadId: leadEventsTable.leadId,
@@ -407,9 +417,6 @@ router.get("/dashboard/action-queue", async (_req, res): Promise<void> => {
     const reasons: string[] = [];
     let sequenceStepDue: number | null = null;
 
-    // --- Rule 1: Overdue follow-up (+50) ---
-    // A lead that visited 3+ days ago and is still new/contacted needs a human touch.
-    // This is the manual follow-up signal, independent of the automated sequence.
     const isOverdueFollowUp =
       (lead.status === "new" || lead.status === "contacted") &&
       new Date(lead.visitDate) <= followUpThreshold;
@@ -419,9 +426,6 @@ router.get("/dashboard/action-queue", async (_req, res): Promise<void> => {
       reasons.push("Overdue follow-up");
     }
 
-    // --- Rule 2: Sequence step due (+40) ---
-    // An active sequence step is due within the next 24h (or already past-due).
-    // Treated as a single "sequence due" signal regardless of how overdue it is.
     const seq = seqByLeadId.get(lead.id);
     const seqNextSendAt = seq?.nextSendAt ? new Date(seq.nextSendAt) : null;
     const isSeqStepDue = seqNextSendAt !== null && seqNextSendAt <= in24h;
@@ -432,7 +436,6 @@ router.get("/dashboard/action-queue", async (_req, res): Promise<void> => {
       sequenceStepDue = seq.currentStep;
     }
 
-    // --- Rule 3: Lead score weight (+20 / +10) ---
     if (lead.score >= 70) {
       urgencyScore += 20;
       reasons.push("High lead score");
@@ -441,8 +444,6 @@ router.get("/dashboard/action-queue", async (_req, res): Promise<void> => {
       reasons.push("Medium lead score");
     }
 
-    // --- Rule 4: Days since last contact (+25 / +15) ---
-    // Fall back to visitDate so brand-new leads with no events are not falsely penalised.
     const lastEvent = lastEventByLeadId.get(lead.id);
     const lastKnownActivity: Date = lastEvent ?? new Date(lead.visitDate);
     const daysSinceContact = Math.floor(
@@ -457,7 +458,6 @@ router.get("/dashboard/action-queue", async (_req, res): Promise<void> => {
       reasons.push("No contact in 7+ days");
     }
 
-    // --- Rule 5: Status weight (+15 / +5) ---
     if (lead.status === "interested") {
       urgencyScore += 15;
       reasons.push("Interested lead");
@@ -465,7 +465,6 @@ router.get("/dashboard/action-queue", async (_req, res): Promise<void> => {
       urgencyScore += 5;
     }
 
-    // Skip leads with no urgency (e.g. brand-new leads with no triggers yet)
     if (urgencyScore === 0) continue;
 
     entries.push({

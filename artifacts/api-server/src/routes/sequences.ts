@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, leadSequencesTable, sequenceTemplatesTable, leadsTable } from "@workspace/db";
 import {
   GetLeadSequenceParams,
@@ -38,10 +38,24 @@ function serializeTemplate(t: DbTemplate) {
   };
 }
 
+async function requireLeadOwnership(leadId: number, gymId: string): Promise<boolean> {
+  const [lead] = await db
+    .select({ id: leadsTable.id })
+    .from(leadsTable)
+    .where(and(eq(leadsTable.id, leadId), eq(leadsTable.gymId, gymId)));
+  return lead != null;
+}
+
 router.get("/leads/:id/sequence", async (req, res): Promise<void> => {
   const params = GetLeadSequenceParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const gymId = req.user!.gymId!;
+  if (!(await requireLeadOwnership(params.data.id, gymId))) {
+    res.status(404).json({ error: "Lead not found" });
     return;
   }
 
@@ -62,6 +76,12 @@ router.post("/leads/:id/sequence/pause", async (req, res): Promise<void> => {
   const params = PauseLeadSequenceParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const gymId = req.user!.gymId!;
+  if (!(await requireLeadOwnership(params.data.id, gymId))) {
+    res.status(404).json({ error: "Lead not found" });
     return;
   }
 
@@ -91,6 +111,12 @@ router.post("/leads/:id/sequence/resume", async (req, res): Promise<void> => {
     return;
   }
 
+  const gymId = req.user!.gymId!;
+  if (!(await requireLeadOwnership(params.data.id, gymId))) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
   const [seq] = await db
     .select()
     .from(leadSequencesTable)
@@ -114,6 +140,12 @@ router.post("/leads/:id/sequence/cancel", async (req, res): Promise<void> => {
   const params = CancelLeadSequenceParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const gymId = req.user!.gymId!;
+  if (!(await requireLeadOwnership(params.data.id, gymId))) {
+    res.status(404).json({ error: "Lead not found" });
     return;
   }
 
