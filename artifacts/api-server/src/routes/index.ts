@@ -6,6 +6,7 @@ import sequencesRouter from "./sequences";
 import analyticsRouter from "./analytics";
 import anthropicRouter from "./anthropic/index";
 import authRouter from "./auth";
+import invitesRouter from "./invites";
 
 const router: IRouter = Router();
 
@@ -54,5 +55,6 @@ router.use(messagingRouter);
 router.use(sequencesRouter);
 router.use(analyticsRouter);
 router.use(anthropicRouter);
+router.use(invitesRouter);
 
 export default router;

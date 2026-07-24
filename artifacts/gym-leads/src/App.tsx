@@ -10,6 +10,7 @@ import LeadNew from "@/pages/lead-new";
 import LeadDetail from "@/pages/lead-detail";
 import Sequences from "@/pages/sequences";
 import Analytics from "@/pages/analytics";
+import Team from "@/pages/team";
 import { useKeepAlive } from "@/hooks/use-keep-alive";
 import { useAuth, AuthProvider } from "@workspace/replit-auth-web";
 import { useState, useEffect } from "react";
@@ -33,13 +34,14 @@ function Router() {
         <Route path="/leads/:id" component={LeadDetail} />
         <Route path="/sequences" component={Sequences} />
         <Route path="/analytics" component={Analytics} />
+        <Route path="/team" component={Team} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
   );
 }
 
-type AuthView = "login" | "register" | "forgot" | "check-email" | "reset-password";
+type AuthView = "login" | "register" | "forgot" | "check-email" | "reset-password" | "accept-invite";
 
 function LoginGate() {
   const { isLoading, isAuthenticated, refetch } = useAuth();
@@ -47,10 +49,16 @@ function LoginGate() {
   const [location] = useLocation();
   const [registeredEmail, setRegisteredEmail] = useState("");
   const [verifiedBanner, setVerifiedBanner] = useState<"success" | "error" | null>(null);
+  const [inviteToken, setInviteToken] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("verified") === "1") {
+    const invite = params.get("invite");
+    if (invite) {
+      setInviteToken(invite);
+      setView("accept-invite");
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (params.get("verified") === "1") {
       setView("login");
       setVerifiedBanner("success");
       window.history.replaceState({}, "", window.location.pathname);
@@ -100,6 +108,13 @@ function LoginGate() {
           {view === "reset-password" && (
             <ResetPasswordForm onBack={() => setView("login")} onSuccess={() => setView("login")} />
           )}
+          {view === "accept-invite" && (
+            <AcceptInviteForm
+              token={inviteToken}
+              onSuccess={refetch}
+              onBack={() => setView("login")}
+            />
+          )}
         </div>
       </div>
     );
@@ -127,19 +142,23 @@ function Logo() {
   );
 }
 
-function InputField({ label, type, value, onChange, placeholder, error }: {
+function InputField({ label, type, value, onChange, placeholder, error, readOnly, id: idProp }: {
   label: string; type: string; value: string;
-  onChange: (v: string) => void; placeholder?: string; error?: string;
+  onChange: (v: string) => void; placeholder?: string; error?: string; readOnly?: boolean; id?: string;
 }) {
+  const id = idProp ?? label.toLowerCase().replace(/\s+/g, "-");
   return (
     <div className="space-y-1">
-      <label className="text-sm font-medium text-foreground">{label}</label>
+      <label htmlFor={id} className="text-sm font-medium text-foreground">{label}</label>
       <input
+        id={id}
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        readOnly={readOnly}
         className={`w-full px-3 py-2 rounded-lg border text-sm bg-background focus:outline-none focus:ring-2 transition-all ${
+          readOnly ? "opacity-60 cursor-not-allowed" :
           error ? "border-destructive focus:ring-destructive/20" : "border-border focus:ring-primary/20"
         }`}
       />
@@ -429,6 +448,119 @@ function CheckEmailMessage({ email, onBack }: { email: string; onBack: () => voi
   );
 }
 
+function AcceptInviteForm({
+  token,
+  onSuccess,
+  onBack,
+}: {
+  token: string;
+  onSuccess: () => void;
+  onBack: () => void;
+}) {
+  const [inviteDetails, setInviteDetails] = useState<{ email: string; gymName: string } | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const [loadingDetails, setLoadingDetails] = useState(true);
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!token) { setLoadError("Invalid invite link."); setLoadingDetails(false); return; }
+    fetch(`/api/auth/invite/${token}`, { credentials: "include" })
+      .then((r) => r.ok ? r.json() : r.json().then((d: { error?: string }) => Promise.reject(d.error ?? "Invalid invite")))
+      .then((d: { email: string; gymName: string }) => { setInviteDetails(d); setLoadingDetails(false); })
+      .catch((err: string) => { setLoadError(err || "This invite link is invalid or has expired."); setLoadingDetails(false); });
+  }, [token]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) { setError("Your name is required."); return; }
+    if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
+    if (password !== confirm) { setError("Passwords don't match."); return; }
+    setError("");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/accept-invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ token, name, password }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onSuccess();
+      } else {
+        setError((data as { error?: string }).error || "Failed to accept invite.");
+      }
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loadingDetails) {
+    return (
+      <div className="space-y-4 text-center">
+        <Logo />
+        <p className="text-muted-foreground text-sm">Checking your invite…</p>
+      </div>
+    );
+  }
+
+  if (loadError || !inviteDetails) {
+    return (
+      <div className="space-y-4 text-center">
+        <Logo />
+        <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+          <p className="font-semibold text-destructive">Invite link invalid</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {loadError || "This invite link is invalid or has expired."}
+          </p>
+          <p className="text-xs text-muted-foreground mt-2">Contact your gym owner for a new invite.</p>
+        </div>
+        <button type="button" onClick={onBack} className="text-primary hover:underline text-sm">
+          ← Back to sign in
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <Logo />
+      <div className="text-center">
+        <h2 className="text-lg font-semibold text-foreground">Join {inviteDetails.gymName}</h2>
+        <p className="text-sm text-muted-foreground mt-1">Set up your account to get started.</p>
+      </div>
+      {error && (
+        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+      <InputField
+        label="Email"
+        id="invite-email"
+        type="email"
+        value={inviteDetails.email}
+        onChange={() => {}}
+        readOnly
+      />
+      <InputField label="Your name" type="text" value={name} onChange={setName} placeholder="Jane Smith" />
+      <InputField label="Password" type="password" value={password} onChange={setPassword} placeholder="8+ characters" />
+      <InputField label="Confirm password" type="password" value={confirm} onChange={setConfirm} placeholder="Same as above" />
+      <SubmitButton loading={loading}>Join {inviteDetails.gymName}</SubmitButton>
+      <p className="text-center text-sm">
+        <button type="button" onClick={onBack} className="text-primary hover:underline text-sm">
+          ← Back to sign in
+        </button>
+      </p>
+    </form>
+  );
+}
+
 function ResetPasswordForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () => void }) {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -454,7 +586,7 @@ function ResetPasswordForm({ onBack, onSuccess }: { onBack: () => void; onSucces
       if (res.ok) {
         onSuccess();
       } else {
-        setError(data.error || "Reset failed. Please request a new link.");
+        setError((data as { error?: string }).error || "Reset failed. Please request a new link.");
       }
     } catch {
       setError("Network error. Please try again.");

@@ -6,6 +6,8 @@ const BASE_URL = process.env.REPLIT_DEV_DOMAIN
   ? `https://${process.env.REPLIT_DEV_DOMAIN}`
   : "http://localhost:3000";
 
+const DEFAULT_GYM_ID = "00000000-0000-0000-0000-000000000001";
+
 /**
  * Register a user via the API (creates gym + owner account), then flip
  * email_verified=true directly in the DB so tests can log in without email.
@@ -89,18 +91,18 @@ export async function setResetToken(
 }
 
 /**
- * Remove a test user, their sessions, and the gym they own.
- * Safe to call even if the user does not exist.
+ * Remove a test user and their sessions. Does NOT delete the gym — use
+ * deleteGymAndAllUsers to clean up the owner + gym in one shot.
  */
 export async function deleteTestUserByEmail(email: string): Promise<void> {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   try {
-    // Find the gym owned by this user before deleting the user
     const { rows } = await pool.query(
-      "SELECT gym_id FROM users WHERE email = $1",
+      "SELECT gym_id, role FROM users WHERE email = $1",
       [email.toLowerCase().trim()],
     );
     const gymId = rows[0]?.gym_id;
+    const role = rows[0]?.role;
 
     await pool.query(
       "DELETE FROM sessions WHERE (sess->>'user')::jsonb->>'email' = $1",
@@ -110,11 +112,91 @@ export async function deleteTestUserByEmail(email: string): Promise<void> {
       email.toLowerCase().trim(),
     ]);
 
-    // Clean up the test gym (only if it's not the shared default gym)
-    const DEFAULT_GYM_ID = "00000000-0000-0000-0000-000000000001";
-    if (gymId && gymId !== DEFAULT_GYM_ID) {
+    // Only delete the gym when deleting an owner and it's not the shared default
+    if (role === "owner" && gymId && gymId !== DEFAULT_GYM_ID) {
+      // Delete dependent rows first
+      await pool.query(
+        "DELETE FROM invites WHERE gym_id = $1",
+        [gymId],
+      );
       await pool.query("DELETE FROM gyms WHERE id = $1", [gymId]);
     }
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
+ * Insert a test invite directly into the DB (bypasses email delivery).
+ * Returns the gymId of the owner's gym.
+ */
+export async function createTestInvite(
+  ownerEmail: string,
+  inviteeEmail: string,
+  token: string,
+  expiresInMs: number = 48 * 60 * 60 * 1000,
+): Promise<string> {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    const { rows } = await pool.query(
+      "SELECT id, gym_id FROM users WHERE email = $1",
+      [ownerEmail.toLowerCase().trim()],
+    );
+    const owner = rows[0];
+    if (!owner) throw new Error(`createTestInvite: owner not found: ${ownerEmail}`);
+
+    const expiresAt = new Date(Date.now() + expiresInMs);
+
+    await pool.query(
+      `INSERT INTO invites (gym_id, email, token, expires_at, invited_by_user_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [owner.gym_id, inviteeEmail.toLowerCase().trim(), token, expiresAt.toISOString(), owner.id],
+    );
+
+    return owner.gym_id as string;
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
+ * Delete a gym and ALL associated data (invites, users, sessions) by owner email.
+ * Use this for full invite-test cleanup.
+ */
+export async function deleteGymAndAllUsers(ownerEmail: string): Promise<void> {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    const { rows } = await pool.query(
+      "SELECT gym_id FROM users WHERE email = $1",
+      [ownerEmail.toLowerCase().trim()],
+    );
+    const gymId = rows[0]?.gym_id;
+    if (!gymId || gymId === DEFAULT_GYM_ID) return;
+
+    // Sessions for all users in this gym
+    await pool.query(
+      `DELETE FROM sessions WHERE (sess->'user'->>'gymId') = $1`,
+      [gymId],
+    );
+
+    // Invites
+    await pool.query("DELETE FROM invites WHERE gym_id = $1", [gymId]);
+
+    // Outbound messages → lead sequences → leads → sequence templates → users
+    await pool.query(
+      `DELETE FROM outbound_messages
+       WHERE lead_id IN (SELECT id FROM leads WHERE gym_id = $1)`,
+      [gymId],
+    );
+    await pool.query(
+      `DELETE FROM lead_sequences
+       WHERE lead_id IN (SELECT id FROM leads WHERE gym_id = $1)`,
+      [gymId],
+    );
+    await pool.query("DELETE FROM leads WHERE gym_id = $1", [gymId]);
+    await pool.query("DELETE FROM sequence_templates WHERE gym_id = $1", [gymId]);
+    await pool.query("DELETE FROM users WHERE gym_id = $1", [gymId]);
+    await pool.query("DELETE FROM gyms WHERE id = $1", [gymId]);
   } finally {
     await pool.end();
   }

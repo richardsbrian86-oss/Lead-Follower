@@ -67,11 +67,11 @@ const generalLimiter = rateLimit({
 });
 
 // Auth limiter — protects sensitive credential endpoints from brute-force and
-// credential-stuffing attacks.  20 req / 15 min per IP is enough headroom for
-// normal use (even with automated e2e test suites) while blocking abuse.
+// credential-stuffing attacks.  100 req / 15 min per IP allows automated e2e
+// test suites to run while still blocking realistic brute-force abuse.
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   handler(_req: Request, res: Response) {
@@ -120,6 +120,8 @@ app.use([
   "/api/auth/register",
   "/api/auth/forgot-password",
   "/api/auth/reset-password",
+  "/api/auth/accept-invite",
+  "/api/auth/resend-verification",
 ], authLimiter);
 app.use("/api/leads/:id/messages/draft", draftLimiter);
 app.use("/api/leads/:id/messages/send", sendLimiter);

@@ -2,8 +2,8 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { GetCurrentAuthUserResponse } from "@workspace/api-zod";
-import { db, usersTable, gymsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, usersTable, gymsTable, invitesTable } from "@workspace/db";
+import { eq, and, isNull, gt } from "drizzle-orm";
 import {
   clearSession,
   getSessionId,
@@ -243,6 +243,101 @@ router.get("/auth/verify-email", async (req: Request, res: Response) => {
     .where(eq(usersTable.id, user.id));
 
   res.redirect(`${appUrl}/?verified=1`);
+});
+
+// GET /auth/invite/:token — public: validate invite token, return gym name + email
+router.get("/auth/invite/:token", async (req: Request, res: Response) => {
+  const { token } = req.params;
+
+  const [invite] = await db
+    .select({
+      email: invitesTable.email,
+      expiresAt: invitesTable.expiresAt,
+      acceptedAt: invitesTable.acceptedAt,
+      gymId: invitesTable.gymId,
+    })
+    .from(invitesTable)
+    .where(eq(invitesTable.token, token));
+
+  if (!invite || invite.acceptedAt || invite.expiresAt < new Date()) {
+    res.status(404).json({ error: "This invite link is invalid or has expired." });
+    return;
+  }
+
+  const [gym] = await db
+    .select({ name: gymsTable.name })
+    .from(gymsTable)
+    .where(eq(gymsTable.id, invite.gymId));
+
+  res.json({ email: invite.email, gymName: gym?.name ?? "your gym" });
+});
+
+// POST /auth/accept-invite — public: create staff account from invite, auto-login
+router.post("/auth/accept-invite", async (req: Request, res: Response) => {
+  const { token, name, password } = req.body ?? {};
+  if (
+    typeof token !== "string" ||
+    typeof name !== "string" ||
+    !name.trim() ||
+    typeof password !== "string" ||
+    password.length < 8
+  ) {
+    res.status(400).json({
+      error: "A valid token, your name, and a password of at least 8 characters are required.",
+    });
+    return;
+  }
+
+  const [invite] = await db
+    .select()
+    .from(invitesTable)
+    .where(eq(invitesTable.token, token));
+
+  if (!invite || invite.acceptedAt || invite.expiresAt < new Date()) {
+    res.status(400).json({ error: "This invite link is invalid or has expired. Contact your gym owner for a new invite." });
+    return;
+  }
+
+  // Check if the email already has an account
+  const [existing] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.email, invite.email));
+
+  if (existing) {
+    res.status(409).json({ error: "An account with this email already exists. Try signing in instead." });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+  const trimmedName = name.trim();
+
+  const [user] = await db
+    .insert(usersTable)
+    .values({
+      email: invite.email,
+      name: trimmedName,
+      firstName: trimmedName.split(" ")[0] ?? null,
+      lastName: trimmedName.split(" ").slice(1).join(" ") || null,
+      passwordHash,
+      emailVerified: true,
+      role: "staff",
+      gymId: invite.gymId,
+    })
+    .returning();
+
+  // Mark invite as accepted
+  await db
+    .update(invitesTable)
+    .set({ acceptedAt: new Date() })
+    .where(eq(invitesTable.token, token));
+
+  // Create session (auto-login)
+  const sessionData: SessionData = { user: buildUserPayload(user) };
+  const sid = await createSession(sessionData);
+  setSessionCookie(res, sid);
+
+  res.status(201).json({ user: buildUserPayload(user) });
 });
 
 router.post("/auth/forgot-password", async (req: Request, res: Response) => {

@@ -1,0 +1,239 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@workspace/replit-auth-web";
+import { UserPlus, Trash2, Users, Mail, Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+interface Member {
+  id: string;
+  name: string | null;
+  email: string | null;
+  role: string;
+  createdAt: string;
+}
+
+interface Invite {
+  id: string;
+  email: string;
+  token: string;
+  expiresAt: string;
+  createdAt: string;
+  inviterName: string | null;
+}
+
+async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    ...options,
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as { error?: string }).error ?? "Request failed");
+  }
+  return res.json() as Promise<T>;
+}
+
+export default function Team() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteError, setInviteError] = useState("");
+
+  const membersQuery = useQuery({
+    queryKey: ["team-members"],
+    queryFn: () => apiFetch<{ members: Member[] }>("/api/invites/members"),
+  });
+
+  const invitesQuery = useQuery({
+    queryKey: ["pending-invites"],
+    queryFn: () => apiFetch<{ invites: Invite[] }>("/api/invites"),
+  });
+
+  const sendInviteMutation = useMutation({
+    mutationFn: (email: string) =>
+      apiFetch("/api/invites", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      }),
+    onSuccess: () => {
+      setInviteEmail("");
+      setInviteError("");
+      queryClient.invalidateQueries({ queryKey: ["pending-invites"] });
+    },
+    onError: (err: Error) => {
+      setInviteError(err.message);
+    },
+  });
+
+  const revokeInviteMutation = useMutation({
+    mutationFn: (token: string) =>
+      apiFetch(`/api/invites/${token}`, { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pending-invites"] });
+    },
+  });
+
+  const isOwner = user?.role === "owner";
+
+  function handleInviteSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setInviteError("");
+    if (!inviteEmail.includes("@")) {
+      setInviteError("A valid email address is required.");
+      return;
+    }
+    sendInviteMutation.mutate(inviteEmail.trim());
+  }
+
+  const members = membersQuery.data?.members ?? [];
+  const invites = invitesQuery.data?.invites ?? [];
+
+  return (
+    <div className="space-y-8 max-w-3xl">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Team</h1>
+        <p className="text-muted-foreground mt-1">
+          Manage your gym's staff and pending invitations.
+        </p>
+      </div>
+
+      {/* Invite form — owner only */}
+      {isOwner && (
+        <div className="rounded-xl border border-border bg-card p-6">
+          <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+            <UserPlus className="w-4 h-4 text-primary" />
+            Invite a team member
+          </h2>
+          <form onSubmit={handleInviteSubmit} className="flex gap-3">
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="colleague@example.com"
+              className="flex-1 px-3 py-2 rounded-lg border border-border text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+            <Button
+              type="submit"
+              disabled={sendInviteMutation.isPending}
+              size="sm"
+            >
+              {sendInviteMutation.isPending ? "Sending…" : "Send invite"}
+            </Button>
+          </form>
+          {inviteError && (
+            <p className="text-xs text-destructive mt-2">{inviteError}</p>
+          )}
+          {sendInviteMutation.isSuccess && (
+            <p className="text-xs text-green-600 mt-2">
+              Invite sent! They'll receive an email with a link to join.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Current staff */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="px-6 py-4 border-b border-border flex items-center gap-2">
+          <Users className="w-4 h-4 text-primary" />
+          <h2 className="text-base font-semibold text-foreground">
+            Staff ({members.length})
+          </h2>
+        </div>
+        {membersQuery.isLoading ? (
+          <div className="px-6 py-8 text-center text-muted-foreground text-sm">
+            Loading…
+          </div>
+        ) : members.length === 0 ? (
+          <div className="px-6 py-8 text-center text-muted-foreground text-sm">
+            No staff members yet.
+          </div>
+        ) : (
+          <ul className="divide-y divide-border">
+            {members.map((m) => (
+              <li key={m.id} className="px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xs uppercase">
+                    {(m.name?.[0] ?? m.email?.[0] ?? "?").toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-foreground">
+                      {m.name ?? m.email}
+                    </div>
+                    {m.name && (
+                      <div className="text-xs text-muted-foreground">{m.email}</div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      m.role === "owner"
+                        ? "bg-primary/10 text-primary border border-primary/20"
+                        : "bg-muted text-muted-foreground border border-border"
+                    }`}
+                  >
+                    {m.role}
+                  </span>
+                  <span className="text-xs text-muted-foreground hidden sm:block">
+                    Joined {new Date(m.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Pending invites — owner only */}
+      {isOwner && (
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <div className="px-6 py-4 border-b border-border flex items-center gap-2">
+            <Mail className="w-4 h-4 text-primary" />
+            <h2 className="text-base font-semibold text-foreground">
+              Pending invites ({invites.length})
+            </h2>
+          </div>
+          {invitesQuery.isLoading ? (
+            <div className="px-6 py-8 text-center text-muted-foreground text-sm">
+              Loading…
+            </div>
+          ) : invites.length === 0 ? (
+            <div className="px-6 py-8 text-center text-muted-foreground text-sm">
+              No pending invites.
+            </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {invites.map((inv) => (
+                <li
+                  key={inv.id}
+                  className="px-6 py-4 flex items-center justify-between gap-4"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-foreground truncate">
+                      {inv.email}
+                    </div>
+                    <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <Clock className="w-3 h-3" />
+                      Expires {new Date(inv.expiresAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => revokeInviteMutation.mutate(inv.token)}
+                    disabled={revokeInviteMutation.isPending}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50 flex-shrink-0"
+                    title="Revoke invite"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Revoke</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
