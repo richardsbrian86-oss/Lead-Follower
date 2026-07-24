@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { db, invitesTable, usersTable, gymsTable } from "@workspace/db";
-import { eq, and, isNull, gt } from "drizzle-orm";
+import { db, invitesTable, usersTable, gymsTable, sessionsTable } from "@workspace/db";
+import { eq, and, isNull, gt, sql } from "drizzle-orm";
 import { generateToken } from "../lib/auth";
 import { sendInviteEmail } from "../lib/email";
 
@@ -148,6 +148,52 @@ router.post(
     }
 
     res.status(201).json({ message: "Invite sent successfully." });
+  },
+);
+
+// DELETE /api/team/members/:userId — remove a staff member (owner-only)
+router.delete(
+  "/team/members/:userId",
+  requireOwner as (req: Request, res: Response, next: NextFunction) => void,
+  async (req: Request, res: Response) => {
+    const { userId } = req.params;
+    const ownerGymId = req.user!.gymId!;
+    const ownerId = req.user!.id;
+
+    if (userId === ownerId) {
+      res.status(400).json({ error: "You cannot remove yourself." });
+      return;
+    }
+
+    const [target] = await db
+      .select({ id: usersTable.id, gymId: usersTable.gymId, role: usersTable.role })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId));
+
+    if (!target) {
+      res.status(404).json({ error: "User not found." });
+      return;
+    }
+
+    if (target.gymId !== ownerGymId) {
+      res.status(403).json({ error: "You do not have permission to remove this user." });
+      return;
+    }
+
+    if (target.role === "owner") {
+      res.status(400).json({ error: "Cannot remove an owner." });
+      return;
+    }
+
+    // Invalidate all active sessions for the removed user
+    await db
+      .delete(sessionsTable)
+      .where(sql`${sessionsTable.sess}->'user'->>'id' = ${userId}`);
+
+    // Remove the user
+    await db.delete(usersTable).where(eq(usersTable.id, userId));
+
+    res.json({ message: "Staff member removed." });
   },
 );
 

@@ -74,6 +74,14 @@ export default function Team() {
     },
   });
 
+  const removeMemberMutation = useMutation({
+    mutationFn: (userId: string) =>
+      apiFetch(`/api/team/members/${userId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["team-members"] });
+    },
+  });
+
   const isOwner = user?.role === "owner";
 
   function handleInviteSubmit(e: React.FormEvent) {
@@ -178,6 +186,22 @@ export default function Team() {
                   <span className="text-xs text-muted-foreground hidden sm:block">
                     Joined {new Date(m.createdAt).toLocaleDateString()}
                   </span>
+                  {isOwner && m.role !== "owner" && m.id !== user?.id && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm(`Remove ${m.name ?? m.email} from the gym? They will lose access immediately.`)) {
+                          removeMemberMutation.mutate(m.id);
+                        }
+                      }}
+                      disabled={removeMemberMutation.isPending}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                      title="Remove staff member"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Remove</span>
+                    </button>
+                  )}
                 </div>
               </li>
             ))}
