@@ -45,6 +45,7 @@ test.describe("Register flow", () => {
     ).toBeVisible();
 
     await page.getByPlaceholder("Jane Smith").fill(name);
+    await page.getByPlaceholder("CrossFit Central").fill("Test Gym");
     await page.getByPlaceholder("you@example.com").fill(email);
     await page.getByPlaceholder("8+ characters").fill(PASSWORD);
     await page.getByRole("button", { name: "Create account" }).click();
@@ -63,6 +64,7 @@ test.describe("Register flow", () => {
       await page.getByRole("button", { name: "Create one" }).click();
 
       await page.getByPlaceholder("Jane Smith").fill("Dup Tester 2");
+      await page.getByPlaceholder("CrossFit Central").fill("Another Gym");
       await page.getByPlaceholder("you@example.com").fill(email);
       await page.getByPlaceholder("8+ characters").fill(PASSWORD);
       await page.getByRole("button", { name: "Create account" }).click();

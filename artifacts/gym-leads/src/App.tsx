@@ -45,13 +45,20 @@ function LoginGate() {
   const { isLoading, isAuthenticated, refetch } = useAuth();
   const [view, setView] = useState<AuthView>("login");
   const [location] = useLocation();
+  const [registeredEmail, setRegisteredEmail] = useState("");
+  const [verifiedBanner, setVerifiedBanner] = useState<"success" | "error" | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("verified") === "true") {
+    if (params.get("verified") === "1") {
       setView("login");
-    }
-    if (window.location.pathname.includes("reset-password") || params.get("token")) {
+      setVerifiedBanner("success");
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (params.get("verifyError") === "1") {
+      setView("login");
+      setVerifiedBanner("error");
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (window.location.pathname.includes("reset-password") || params.get("token")) {
       setView("reset-password");
     }
   }, [location]);
@@ -71,11 +78,28 @@ function LoginGate() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="w-full max-w-sm px-6">
-          {view === "login" && <LoginForm onRegister={() => setView("register")} onForgot={() => setView("forgot")} onSuccess={refetch} />}
-          {view === "register" && <RegisterForm onLogin={() => setView("login")} onSuccess={() => setView("check-email")} />}
+          {view === "login" && (
+            <LoginForm
+              onRegister={() => { setVerifiedBanner(null); setView("register"); }}
+              onForgot={() => { setVerifiedBanner(null); setView("forgot"); }}
+              onSuccess={refetch}
+              verifiedBanner={verifiedBanner}
+              onDismissBanner={() => setVerifiedBanner(null)}
+            />
+          )}
+          {view === "register" && (
+            <RegisterForm
+              onLogin={() => setView("login")}
+              onSuccess={(email) => { setRegisteredEmail(email); setView("check-email"); }}
+            />
+          )}
           {view === "forgot" && <ForgotPasswordForm onBack={() => setView("login")} />}
-          {view === "check-email" && <CheckEmailMessage onBack={() => setView("login")} />}
-          {view === "reset-password" && <ResetPasswordForm onBack={() => setView("login")} onSuccess={() => setView("login")} />}
+          {view === "check-email" && (
+            <CheckEmailMessage email={registeredEmail} onBack={() => setView("login")} />
+          )}
+          {view === "reset-password" && (
+            <ResetPasswordForm onBack={() => setView("login")} onSuccess={() => setView("login")} />
+          )}
         </div>
       </div>
     );
@@ -141,7 +165,19 @@ function SubmitButton({ children, loading, disabled }: { children: React.ReactNo
   );
 }
 
-function LoginForm({ onRegister, onForgot, onSuccess }: { onRegister: () => void; onForgot: () => void; onSuccess: () => void }) {
+function LoginForm({
+  onRegister,
+  onForgot,
+  onSuccess,
+  verifiedBanner,
+  onDismissBanner,
+}: {
+  onRegister: () => void;
+  onForgot: () => void;
+  onSuccess: () => void;
+  verifiedBanner?: "success" | "error" | null;
+  onDismissBanner?: () => void;
+}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -180,6 +216,24 @@ function LoginForm({ onRegister, onForgot, onSuccess }: { onRegister: () => void
     <form onSubmit={handleSubmit} className="space-y-4">
       <Logo />
       <h2 className="text-lg font-semibold text-center text-foreground">Welcome back</h2>
+
+      {verifiedBanner === "success" && (
+        <div className="p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700 flex items-start justify-between gap-2">
+          <span>Email verified — sign in below</span>
+          {onDismissBanner && (
+            <button type="button" onClick={onDismissBanner} className="text-green-500 hover:text-green-700 flex-shrink-0">✕</button>
+          )}
+        </div>
+      )}
+      {verifiedBanner === "error" && (
+        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive flex items-start justify-between gap-2">
+          <span>Verification link is invalid or has expired. Please request a new one.</span>
+          {onDismissBanner && (
+            <button type="button" onClick={onDismissBanner} className="text-destructive/60 hover:text-destructive flex-shrink-0">✕</button>
+          )}
+        </div>
+      )}
+
       {error && (
         <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive">
           {error}
@@ -204,8 +258,9 @@ function LoginForm({ onRegister, onForgot, onSuccess }: { onRegister: () => void
   );
 }
 
-function RegisterForm({ onLogin, onSuccess }: { onLogin: () => void; onSuccess: () => void }) {
+function RegisterForm({ onLogin, onSuccess }: { onLogin: () => void; onSuccess: (email: string) => void }) {
   const [name, setName] = useState("");
+  const [gymName, setGymName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -215,6 +270,7 @@ function RegisterForm({ onLogin, onSuccess }: { onLogin: () => void; onSuccess: 
   function validate() {
     const e: Record<string, string> = {};
     if (!name.trim()) e.name = "Name is required.";
+    if (!gymName.trim()) e.gymName = "Gym name is required.";
     if (!email.includes("@")) e.email = "Valid email is required.";
     if (password.length < 8) e.password = "At least 8 characters.";
     return e;
@@ -232,11 +288,11 @@ function RegisterForm({ onLogin, onSuccess }: { onLogin: () => void; onSuccess: 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, gymName, email, password }),
       });
       const data = await res.json();
       if (res.ok) {
-        onSuccess();
+        onSuccess(email);
       } else {
         setServerError(data.error || "Registration failed.");
       }
@@ -257,6 +313,7 @@ function RegisterForm({ onLogin, onSuccess }: { onLogin: () => void; onSuccess: 
         </div>
       )}
       <InputField label="Your name" type="text" value={name} onChange={setName} placeholder="Jane Smith" error={errors.name} />
+      <InputField label="Gym name" type="text" value={gymName} onChange={setGymName} placeholder="CrossFit Central" error={errors.gymName} />
       <InputField label="Email" type="email" value={email} onChange={setEmail} placeholder="you@example.com" error={errors.email} />
       <InputField label="Password" type="password" value={password} onChange={setPassword} placeholder="8+ characters" error={errors.password} />
       <SubmitButton loading={loading}>Create account</SubmitButton>
@@ -320,19 +377,54 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
   );
 }
 
-function CheckEmailMessage({ onBack }: { onBack: () => void }) {
+function CheckEmailMessage({ email, onBack }: { email: string; onBack: () => void }) {
+  const [resendState, setResendState] = useState<"idle" | "loading" | "sent" | "error">("idle");
+
+  async function handleResend() {
+    setResendState("loading");
+    try {
+      const res = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email }),
+      });
+      setResendState(res.ok ? "sent" : "error");
+    } catch {
+      setResendState("error");
+    }
+  }
+
   return (
     <div className="space-y-4 text-center">
       <Logo />
       <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
         <p className="font-semibold text-foreground">Check your email</p>
         <p className="text-sm text-muted-foreground mt-1">
-          We sent a verification link to your inbox. Click it to activate your account, then sign in.
+          We sent a verification link{email ? ` to ${email}` : " to your inbox"}. Click it to activate your account, then sign in.
         </p>
       </div>
-      <button type="button" onClick={onBack} className="text-primary hover:underline text-sm">
-        ← Back to sign in
-      </button>
+      {resendState === "sent" && (
+        <div className="p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700">
+          Verification email resent! Check your inbox.
+        </div>
+      )}
+      {resendState === "error" && (
+        <p className="text-sm text-destructive">Failed to resend. Please try again.</p>
+      )}
+      <div className="flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={handleResend}
+          disabled={resendState === "loading" || resendState === "sent"}
+          className="text-primary hover:underline text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {resendState === "loading" ? "Sending…" : resendState === "sent" ? "Email sent ✓" : "Resend verification email"}
+        </button>
+        <button type="button" onClick={onBack} className="text-muted-foreground hover:underline text-sm">
+          ← Back to sign in
+        </button>
+      </div>
     </div>
   );
 }

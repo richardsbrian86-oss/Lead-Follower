@@ -6,23 +6,21 @@ const BASE_URL = process.env.REPLIT_DEV_DOMAIN
   ? `https://${process.env.REPLIT_DEV_DOMAIN}`
   : "http://localhost:3000";
 
-const DEFAULT_GYM_ID = "00000000-0000-0000-0000-000000000001";
-
 /**
- * Register a user via the API, then flip email_verified=true and assign the
- * default gymId directly in the DB so tests can log in without touching email.
+ * Register a user via the API (creates gym + owner account), then flip
+ * email_verified=true directly in the DB so tests can log in without email.
  * If the email already exists (409) we just verify it and move on.
  */
 export async function registerAndVerifyUser(
   email: string,
   password: string,
   name: string,
-  gymId: string = DEFAULT_GYM_ID,
+  gymName: string = "Test Gym",
 ): Promise<void> {
   const res = await fetch(`${BASE_URL}/api/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password, name }),
+    body: JSON.stringify({ email, password, name, gymName }),
   });
 
   if (!res.ok && res.status !== 409) {
@@ -37,10 +35,9 @@ export async function registerAndVerifyUser(
       `UPDATE users
          SET email_verified = true,
              verify_token   = null,
-             verify_token_expiry = null,
-             gym_id = $2
+             verify_token_expiry = null
        WHERE email = $1`,
-      [email.toLowerCase().trim(), gymId],
+      [email.toLowerCase().trim()],
     );
   } finally {
     await pool.end();
@@ -49,34 +46,24 @@ export async function registerAndVerifyUser(
 
 /**
  * Register an unverified user (no DB update — emailVerified stays false).
- * Assigns the default gymId so the user has a valid gym on their account.
+ * The registration endpoint assigns a gym and gymId automatically.
  */
 export async function registerUnverifiedUser(
   email: string,
   password: string,
   name: string,
-  gymId: string = DEFAULT_GYM_ID,
+  gymName: string = "Test Gym",
 ): Promise<void> {
   const res = await fetch(`${BASE_URL}/api/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password, name }),
+    body: JSON.stringify({ email, password, name, gymName }),
   });
 
   if (!res.ok && res.status !== 409) {
     throw new Error(
       `registerUnverifiedUser: register request failed ${res.status}: ${await res.text()}`,
     );
-  }
-
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  try {
-    await pool.query(
-      `UPDATE users SET gym_id = $2 WHERE email = $1 AND gym_id IS NULL`,
-      [email.toLowerCase().trim(), gymId],
-    );
-  } finally {
-    await pool.end();
   }
 }
 
@@ -102,12 +89,19 @@ export async function setResetToken(
 }
 
 /**
- * Remove a test user and their sessions by email. Safe to call even if the
- * user does not exist.
+ * Remove a test user, their sessions, and the gym they own.
+ * Safe to call even if the user does not exist.
  */
 export async function deleteTestUserByEmail(email: string): Promise<void> {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   try {
+    // Find the gym owned by this user before deleting the user
+    const { rows } = await pool.query(
+      "SELECT gym_id FROM users WHERE email = $1",
+      [email.toLowerCase().trim()],
+    );
+    const gymId = rows[0]?.gym_id;
+
     await pool.query(
       "DELETE FROM sessions WHERE (sess->>'user')::jsonb->>'email' = $1",
       [email.toLowerCase().trim()],
@@ -115,6 +109,12 @@ export async function deleteTestUserByEmail(email: string): Promise<void> {
     await pool.query("DELETE FROM users WHERE email = $1", [
       email.toLowerCase().trim(),
     ]);
+
+    // Clean up the test gym (only if it's not the shared default gym)
+    const DEFAULT_GYM_ID = "00000000-0000-0000-0000-000000000001";
+    if (gymId && gymId !== DEFAULT_GYM_ID) {
+      await pool.query("DELETE FROM gyms WHERE id = $1", [gymId]);
+    }
   } finally {
     await pool.end();
   }

@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { GetCurrentAuthUserResponse } from "@workspace/api-zod";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, gymsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
   clearSession,
@@ -63,6 +63,16 @@ function buildUserPayload(user: {
   };
 }
 
+function createGymSlug(gymName: string): string {
+  const base = gymName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  const suffix = crypto.randomBytes(4).toString("hex");
+  return base ? `${base}-${suffix}` : suffix;
+}
+
 router.get("/auth/user", (req: Request, res: Response) => {
   res.json(
     GetCurrentAuthUserResponse.parse({
@@ -72,18 +82,20 @@ router.get("/auth/user", (req: Request, res: Response) => {
 });
 
 router.post("/auth/register", async (req: Request, res: Response) => {
-  const { email, password, name } = req.body ?? {};
+  const { email, password, name, gymName } = req.body ?? {};
   if (
     typeof email !== "string" ||
     !email.includes("@") ||
     typeof password !== "string" ||
     password.length < 8 ||
     typeof name !== "string" ||
-    !name.trim()
+    !name.trim() ||
+    typeof gymName !== "string" ||
+    !gymName.trim()
   ) {
     res.status(400).json({
       error:
-        "Valid email, a password of at least 8 characters, and your name are required.",
+        "Your name, gym name, a valid email, and a password of at least 8 characters are required.",
     });
     return;
   }
@@ -97,6 +109,15 @@ router.post("/auth/register", async (req: Request, res: Response) => {
     res.status(409).json({ error: "An account with that email already exists." });
     return;
   }
+
+  // Create the gym first
+  const [gym] = await db
+    .insert(gymsTable)
+    .values({
+      name: gymName.trim(),
+      slug: createGymSlug(gymName.trim()),
+    })
+    .returning();
 
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
   const verifyToken = generateToken();
@@ -113,7 +134,8 @@ router.post("/auth/register", async (req: Request, res: Response) => {
       emailVerified: false,
       verifyToken,
       verifyTokenExpiry,
-      role: "staff",
+      role: "owner",
+      gymId: gym.id,
     })
     .returning();
 
@@ -124,6 +146,35 @@ router.post("/auth/register", async (req: Request, res: Response) => {
   }
 
   res.status(201).json({ message: "Account created. Please check your email to verify your account." });
+});
+
+router.post("/auth/resend-verification", async (req: Request, res: Response) => {
+  const { email } = req.body ?? {};
+  if (typeof email !== "string" || !email.includes("@")) {
+    res.status(400).json({ error: "A valid email address is required." });
+    return;
+  }
+
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, email.toLowerCase().trim()));
+
+  if (user && !user.emailVerified) {
+    const verifyToken = generateToken();
+    const verifyTokenExpiry = new Date(Date.now() + VERIFY_TTL_MS);
+    await db
+      .update(usersTable)
+      .set({ verifyToken, verifyTokenExpiry })
+      .where(eq(usersTable.id, user.id));
+    try {
+      await sendVerificationEmail(user.email!, user.name!, verifyToken, getAppUrl(req));
+    } catch (err) {
+      req.log?.warn({ err }, "Failed to resend verification email");
+    }
+  }
+
+  res.json({ message: "If your email is registered and unverified, a new verification link is on its way." });
 });
 
 router.post("/auth/login", async (req: Request, res: Response) => {
@@ -169,8 +220,10 @@ router.post("/auth/login", async (req: Request, res: Response) => {
 
 router.get("/auth/verify-email", async (req: Request, res: Response) => {
   const { token } = req.query;
+  const appUrl = getAppUrl(req);
+
   if (typeof token !== "string") {
-    res.status(400).send("Invalid verification link.");
+    res.redirect(`${appUrl}/?verifyError=1`);
     return;
   }
 
@@ -180,7 +233,7 @@ router.get("/auth/verify-email", async (req: Request, res: Response) => {
     .where(eq(usersTable.verifyToken, token));
 
   if (!user || !user.verifyTokenExpiry || user.verifyTokenExpiry < new Date()) {
-    res.redirect(`${getAppUrl(req)}/?verified=invalid`);
+    res.redirect(`${appUrl}/?verifyError=1`);
     return;
   }
 
@@ -189,7 +242,7 @@ router.get("/auth/verify-email", async (req: Request, res: Response) => {
     .set({ emailVerified: true, verifyToken: null, verifyTokenExpiry: null })
     .where(eq(usersTable.id, user.id));
 
-  res.redirect(`${getAppUrl(req)}/?verified=true`);
+  res.redirect(`${appUrl}/?verified=1`);
 });
 
 router.post("/auth/forgot-password", async (req: Request, res: Response) => {
