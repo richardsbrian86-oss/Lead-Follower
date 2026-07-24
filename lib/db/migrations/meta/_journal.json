@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1753315200000,
+      "tag": "0000_create_invites",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1753315260000,
+      "tag": "0001_drop_sequence_templates_step_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1753315320000,
+      "tag": "0002_fix_sequence_templates_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1753315380000,
+      "tag": "0003_rename_sequence_templates_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1753315440000,
+      "tag": "0004_sequence_templates_constraint_to_index",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,4 +1,5 @@
-import { pgTable, serial, integer, text, timestamp, varchar, unique } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { uniqueIndex } from "drizzle-orm/pg-core";
 import { gymsTable } from "./gyms.js";
 
 export const sequenceTemplatesTable = pgTable("sequence_templates", {
@@ -10,7 +11,7 @@ export const sequenceTemplatesTable = pgTable("sequence_templates", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
-  unique("sequence_templates_gym_step_unique").on(table.gymId, table.step),
+  uniqueIndex("sequence_templates_gym_id_step_unique").on(table.gymId, table.step),
 ]);
 
 export type SequenceTemplate = typeof sequenceTemplatesTable.$inferSelect;
