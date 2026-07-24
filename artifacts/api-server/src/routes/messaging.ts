@@ -116,6 +116,7 @@ router.post("/leads/:id/messages/send", async (req, res): Promise<void> => {
     .insert(outboundMessagesTable)
     .values({
       leadId: lead.id,
+      gymId: lead.gymId,
       channel: body.data.channel,
       subject: body.data.subject ?? null,
       body: body.data.body,

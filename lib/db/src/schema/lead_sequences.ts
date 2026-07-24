@@ -1,5 +1,6 @@
-import { pgTable, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, boolean, timestamp, varchar } from "drizzle-orm/pg-core";
 import { leadsTable } from "./leads.js";
+import { gymsTable } from "./gyms.js";
 
 export const leadSequencesTable = pgTable("lead_sequences", {
   id: serial("id").primaryKey(),
@@ -7,6 +8,7 @@ export const leadSequencesTable = pgTable("lead_sequences", {
     .notNull()
     .unique()
     .references(() => leadsTable.id, { onDelete: "cascade" }),
+  gymId: varchar("gym_id").references(() => gymsTable.id),
   currentStep: integer("current_step").notNull().default(0),
   paused: boolean("paused").notNull().default(false),
   cancelled: boolean("cancelled").notNull().default(false),

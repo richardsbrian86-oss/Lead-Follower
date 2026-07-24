@@ -55,21 +55,28 @@ async function processSequences(): Promise<void> {
       continue;
     }
 
+    const gymId = lead.gymId ?? null;
+
     const templates = await db
       .select()
       .from(sequenceTemplatesTable)
-      .where(eq(sequenceTemplatesTable.step, seq.currentStep));
+      .where(
+        and(
+          eq(sequenceTemplatesTable.step, seq.currentStep),
+          gymId ? eq(sequenceTemplatesTable.gymId, gymId) : undefined,
+        ),
+      );
 
     const template = templates[0];
     if (!template) {
-      logger.warn({ step: seq.currentStep }, "No template found for step");
+      logger.warn({ step: seq.currentStep, gymId }, "No template found for step");
       continue;
     }
 
     try {
       const nextStep = seq.currentStep + 1;
       const nextSendAt = nextStep < MAX_STEPS
-        ? await getNextSendAt(nextStep, lead.visitDate)
+        ? await getNextSendAt(nextStep, lead.visitDate, gymId)
         : null;
 
       // Generate and send email
@@ -85,6 +92,7 @@ async function processSequences(): Promise<void> {
         .insert(outboundMessagesTable)
         .values({
           leadId: lead.id,
+          gymId,
           channel: "email",
           subject: emailDraft.subject,
           body: emailDraft.body,
@@ -113,6 +121,7 @@ async function processSequences(): Promise<void> {
         .insert(outboundMessagesTable)
         .values({
           leadId: lead.id,
+          gymId,
           channel: "sms",
           subject: null,
           body: smsDraft.body,
@@ -143,11 +152,15 @@ async function processSequences(): Promise<void> {
   }
 }
 
-async function getNextSendAt(step: number, visitDate: Date): Promise<Date | null> {
+async function getNextSendAt(step: number, visitDate: Date, gymId: string | null): Promise<Date | null> {
+  const conditions = [eq(sequenceTemplatesTable.step, step)];
+  if (gymId) conditions.push(eq(sequenceTemplatesTable.gymId, gymId));
+
   const templates = await db
     .select()
     .from(sequenceTemplatesTable)
-    .where(eq(sequenceTemplatesTable.step, step));
+    .where(and(...conditions));
+
   const template = templates[0];
   if (!template) return null;
 
@@ -156,11 +169,15 @@ async function getNextSendAt(step: number, visitDate: Date): Promise<Date | null
   return base;
 }
 
-export async function createSequenceForLead(leadId: number, visitDate: Date): Promise<void> {
+export async function createSequenceForLead(leadId: number, visitDate: Date, gymId?: string | null): Promise<void> {
+  const conditions = [eq(sequenceTemplatesTable.step, 0)];
+  if (gymId) conditions.push(eq(sequenceTemplatesTable.gymId, gymId));
+
   const templates = await db
     .select()
     .from(sequenceTemplatesTable)
-    .where(eq(sequenceTemplatesTable.step, 0));
+    .where(and(...conditions));
+
   const firstTemplate = templates[0];
   if (!firstTemplate) return;
 
@@ -171,6 +188,7 @@ export async function createSequenceForLead(leadId: number, visitDate: Date): Pr
     .insert(leadSequencesTable)
     .values({
       leadId,
+      gymId: gymId ?? null,
       currentStep: 0,
       paused: false,
       cancelled: false,

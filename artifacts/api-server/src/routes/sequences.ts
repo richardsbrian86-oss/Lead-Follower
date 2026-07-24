@@ -168,10 +168,13 @@ router.post("/leads/:id/sequence/cancel", async (req, res): Promise<void> => {
   res.json(CancelLeadSequenceResponse.parse(serializeSeq(updated)));
 });
 
-router.get("/sequences/templates", async (_req, res): Promise<void> => {
+// Templates are scoped per gym — each gym has its own customizable sequence templates.
+router.get("/sequences/templates", async (req, res): Promise<void> => {
+  const gymId = req.user!.gymId!;
   const templates = await db
     .select()
     .from(sequenceTemplatesTable)
+    .where(eq(sequenceTemplatesTable.gymId, gymId))
     .orderBy(sequenceTemplatesTable.step);
   res.json(ListSequenceTemplatesResponse.parse(templates.map(serializeTemplate)));
 });
@@ -189,13 +192,19 @@ router.put("/sequences/templates/:step", async (req, res): Promise<void> => {
     return;
   }
 
+  const gymId = req.user!.gymId!;
   const [existing] = await db
     .select()
     .from(sequenceTemplatesTable)
-    .where(eq(sequenceTemplatesTable.step, params.data.step));
+    .where(
+      and(
+        eq(sequenceTemplatesTable.step, params.data.step),
+        eq(sequenceTemplatesTable.gymId, gymId),
+      ),
+    );
 
   if (!existing) {
-    res.status(404).json({ error: "Template not found" });
+    res.status(404).json({ error: "Template not found for your gym" });
     return;
   }
 
@@ -208,7 +217,12 @@ router.put("/sequences/templates/:step", async (req, res): Promise<void> => {
   const [updated] = await db
     .update(sequenceTemplatesTable)
     .set(updateData)
-    .where(eq(sequenceTemplatesTable.step, params.data.step))
+    .where(
+      and(
+        eq(sequenceTemplatesTable.step, params.data.step),
+        eq(sequenceTemplatesTable.gymId, gymId),
+      ),
+    )
     .returning();
 
   res.json(UpdateSequenceTemplateResponse.parse(serializeTemplate(updated)));
