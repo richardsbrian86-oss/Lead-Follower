@@ -1,4 +1,6 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import { eq } from "drizzle-orm";
+import { db, usersTable } from "@workspace/db";
 import healthRouter from "./health";
 import leadsRouter from "./leads";
 import messagingRouter from "./messaging";
@@ -45,6 +47,34 @@ function requireGym(req: Request, res: Response, next: NextFunction) {
     return;
   }
   next();
+}
+
+// DEV BYPASS: auto-inject the first owner user so API calls work without a session.
+// Remove this block (and the db/eq imports above) before deploying to live gyms.
+if (process.env.NODE_ENV !== "production") {
+  router.use(async (req: Request, _res: Response, next: NextFunction) => {
+    if (req.isAuthenticated()) { next(); return; }
+    try {
+      const [owner] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.gymId, "00000000-0000-0000-0000-000000000001"))
+        .limit(1);
+      if (owner) {
+        req.user = {
+          id: owner.id,
+          email: owner.email ?? null,
+          name: owner.name ?? null,
+          role: owner.role as "owner" | "staff",
+          gymId: owner.gymId ?? undefined,
+          firstName: owner.firstName ?? null,
+          lastName: owner.lastName ?? null,
+          profileImageUrl: owner.profileImageUrl ?? null,
+        };
+      }
+    } catch { /* ignore */ }
+    next();
+  });
 }
 
 router.use(requireAuth as (req: Request, res: Response, next: NextFunction) => void);

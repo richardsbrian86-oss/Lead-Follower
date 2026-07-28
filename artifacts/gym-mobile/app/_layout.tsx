@@ -33,20 +33,16 @@ const queryClient = new QueryClient({
 });
 
 function AuthGate() {
-  const { isAuthenticated, isLoading } = useAuth();
+  // DEV BYPASS: login disabled during development — re-enable before deploying to live gyms
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    if (isLoading) return;
-    const inTabs = segments[0] === "(tabs)";
-    const inLogin = segments[0] === "login";
-    if (!isAuthenticated && !inLogin) {
-      router.replace("/login");
-    } else if (isAuthenticated && inLogin) {
+    // Redirect away from login screen since auth is bypassed
+    if (segments[0] === "login") {
       router.replace("/");
     }
-  }, [isAuthenticated, isLoading, segments]);
+  }, [segments]);
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
