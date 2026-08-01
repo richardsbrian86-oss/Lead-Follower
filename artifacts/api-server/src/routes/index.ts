@@ -65,7 +65,10 @@ if (process.env.NODE_ENV !== "production") {
           id: owner.id,
           email: owner.email ?? null,
           name: owner.name ?? null,
-          role: owner.role as "owner" | "staff",
+          // Forced to "owner" so every page (including owner-only ones like
+          // Team) is reachable while login is disabled — the real DB row
+          // may be a "staff" account since no owner exists in dev data.
+          role: "owner",
           gymId: owner.gymId ?? undefined,
           firstName: owner.firstName ?? null,
           lastName: owner.lastName ?? null,
