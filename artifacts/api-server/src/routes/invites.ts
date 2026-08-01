@@ -156,7 +156,7 @@ router.delete(
   "/team/members/:userId",
   requireOwner as (req: Request, res: Response, next: NextFunction) => void,
   async (req: Request, res: Response) => {
-    const { userId } = req.params;
+    const userId = req.params.userId as string;
     const ownerGymId = req.user!.gymId!;
     const ownerId = req.user!.id;
 
@@ -209,7 +209,7 @@ router.delete(
   "/invites/:token",
   requireOwner as (req: Request, res: Response, next: NextFunction) => void,
   async (req: Request, res: Response) => {
-    const { token } = req.params;
+    const token = req.params.token as string;
     const gymId = req.user!.gymId!;
 
     const [invite] = await db

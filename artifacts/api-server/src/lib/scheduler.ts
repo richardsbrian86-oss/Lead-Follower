@@ -170,13 +170,12 @@ async function getNextSendAt(step: number, visitDate: Date, gymId: string | null
 }
 
 export async function createSequenceForLead(leadId: number, visitDate: Date, gymId?: string | null): Promise<void> {
-  const conditions = [eq(sequenceTemplatesTable.step, 0)];
-  if (gymId) conditions.push(eq(sequenceTemplatesTable.gymId, gymId));
+  if (!gymId) return;
 
   const templates = await db
     .select()
     .from(sequenceTemplatesTable)
-    .where(and(...conditions));
+    .where(and(eq(sequenceTemplatesTable.step, 0), eq(sequenceTemplatesTable.gymId, gymId)));
 
   const firstTemplate = templates[0];
   if (!firstTemplate) return;
@@ -188,7 +187,7 @@ export async function createSequenceForLead(leadId: number, visitDate: Date, gym
     .insert(leadSequencesTable)
     .values({
       leadId,
-      gymId: gymId ?? null,
+      gymId,
       currentStep: 0,
       paused: false,
       cancelled: false,

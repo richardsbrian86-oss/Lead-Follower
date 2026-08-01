@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { Router, type IRouter, type Request, type Response } from "express";
-import { GetCurrentAuthUserResponse } from "@workspace/api-zod";
+import { GetCurrentAuthUserResponse, AuthUserRole } from "@workspace/api-zod";
 import { db, usersTable, gymsTable, invitesTable } from "@workspace/db";
 import { eq, and, isNull, gt } from "drizzle-orm";
 import {
@@ -55,7 +55,7 @@ function buildUserPayload(user: {
     id: user.id,
     email: user.email,
     name: user.name,
-    role: user.role,
+    role: user.role as AuthUserRole,
     gymId: user.gymId ?? null,
     firstName: user.firstName,
     lastName: user.lastName,
@@ -247,7 +247,7 @@ router.get("/auth/verify-email", async (req: Request, res: Response) => {
 
 // GET /auth/invite/:token — public: validate invite token, return gym name + email
 router.get("/auth/invite/:token", async (req: Request, res: Response) => {
-  const { token } = req.params;
+  const token = req.params.token as string;
 
   const [invite] = await db
     .select({
