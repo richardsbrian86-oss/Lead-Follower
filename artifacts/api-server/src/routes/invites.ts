@@ -190,6 +190,13 @@ router.delete(
       .delete(sessionsTable)
       .where(sql`${sessionsTable.sess}->'user'->>'id' = ${userId}`);
 
+    // Remove any invites sent by this user to avoid FK constraint violation on invitedByUserId.
+    // Only owners can send invites, so this is a defensive cleanup for edge cases.
+    await db.delete(invitesTable).where(eq(invitesTable.invitedByUserId, userId as string));
+
+    // Note: leads are scoped by gymId, not by userId, so no lead reassignment is needed.
+    // All gym leads remain visible to the owner after staff removal.
+
     // Remove the user
     await db.delete(usersTable).where(eq(usersTable.id, userId));
 
