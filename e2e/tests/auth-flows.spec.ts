@@ -328,6 +328,36 @@ test.describe("Email verification flow", () => {
     ).toBeVisible();
   });
 
+  test("signed-in user visiting /?verified=true is redirected to app without seeing the banner", async ({
+    page,
+  }) => {
+    const email = `signed-verified-${uid()}@test.example`;
+    await registerAndVerifyUser(email, PASSWORD, "Already Signed In");
+
+    try {
+      // Sign in via Clerk UI first
+      await page.goto("/");
+      await page.getByPlaceholder("you@example.com").fill(email);
+      await page.getByPlaceholder("Your password").fill(PASSWORD);
+      await page.getByRole("button", { name: "Sign in" }).click();
+      await expect(page.getByText("Leads Pipeline")).toBeVisible();
+
+      // Now navigate to /?verified=true while already signed in
+      await page.goto("/?verified=true");
+
+      // Banner must NOT appear for a signed-in user
+      await expect(page.getByTestId("verified-success")).not.toBeVisible();
+
+      // The ?verified query param should have been stripped from the URL
+      await expect(page).not.toHaveURL(/verified/);
+
+      // The app content (not the landing page) should be visible
+      await expect(page.getByText("Leads Pipeline")).toBeVisible();
+    } finally {
+      await deleteTestUserByEmail(email);
+    }
+  });
+
   test("verified banner shows 'Sign in now' button that navigates to sign-in", async ({
     page,
   }) => {

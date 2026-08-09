@@ -334,6 +334,19 @@ function HomeRedirect() {
   const { isLoaded, isSignedIn } = useAuth();
   const qc = useQueryClient();
 
+  // When a signed-in user lands on /?verified=true (e.g. via back button after
+  // email verification), strip the query param so the verification banner is
+  // never shown to an already-authenticated user.  We use replaceState rather
+  // than wouter's setLocation because setLocation only controls the path
+  // segment and wouldn't remove the ?verified query string.
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("verified")) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, [isLoaded, isSignedIn]);
+
   // Consume any pending invite token once on sign-in, then invalidate ["me"]
   // so the query below refetches with the newly assigned gymId.
   useEffect(() => {
