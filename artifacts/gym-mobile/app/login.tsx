@@ -20,16 +20,16 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 
-import { useAuth } from "@/context/AuthContext";
+import { useSignIn, useSignUp } from "@clerk/expo";
+import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 
-type AuthView = "login" | "forgot" | "forgot-sent";
+type AuthView = "sign-in" | "sign-up" | "verify-email";
 
 export default function LoginScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { login } = useAuth();
-  const [view, setView] = useState<AuthView>("login");
+  const [view, setView] = useState<AuthView>("sign-in");
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
@@ -66,65 +66,73 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.formContainer}>
-            {view === "login" && (
-              <LoginForm
+            {view === "sign-in" && (
+              <SignInForm colors={colors} onSignUp={() => setView("sign-up")} />
+            )}
+            {view === "sign-up" && (
+              <SignUpForm
                 colors={colors}
-                onLogin={login}
-                onForgot={() => setView("forgot")}
+                onSignIn={() => setView("sign-in")}
+                onVerify={() => setView("verify-email")}
               />
             )}
-            {view === "forgot" && (
-              <ForgotForm
-                colors={colors}
-                onBack={() => setView("login")}
-                onSent={() => setView("forgot-sent")}
-              />
-            )}
-            {view === "forgot-sent" && (
-              <ForgotSentMessage colors={colors} onBack={() => setView("login")} />
+            {view === "verify-email" && (
+              <VerifyEmailForm colors={colors} onBack={() => setView("sign-up")} />
             )}
           </View>
+
+          {/* Required for Clerk bot protection */}
+          <View nativeID="clerk-captcha" />
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
 }
 
-function LoginForm({
+function SignInForm({
   colors,
-  onLogin,
-  onForgot,
+  onSignUp,
 }: {
   colors: ReturnType<typeof useColors>;
-  onLogin: (email: string, password: string) => Promise<{ error?: string; code?: string }>;
-  onForgot: () => void;
+  onSignUp: () => void;
 }) {
+  const { signIn, fetchStatus } = useSignIn();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [needsVerify, setNeedsVerify] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   const scale = useSharedValue(1);
   const btnStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
   async function handleSubmit() {
-    if (!email.trim() || !password) { setError("Please enter your email and password."); return; }
+    if (!email.trim() || !password) {
+      setError("Please enter your email and password.");
+      return;
+    }
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     scale.value = withSpring(0.96, {}, () => { scale.value = withSpring(1); });
     setError("");
-    setNeedsVerify(false);
-    setLoading(true);
-    try {
-      const result = await onLogin(email.trim().toLowerCase(), password);
-      if (result.error) {
-        setError(result.error);
-        if (result.code === "EMAIL_NOT_VERIFIED") setNeedsVerify(true);
-      }
-    } finally {
-      setLoading(false);
+
+    const { error: signInError } = await signIn.password({
+      emailAddress: email.trim().toLowerCase(),
+      password,
+    });
+
+    if (signInError) {
+      setError(
+        signInError.message ??
+          "Invalid email or password. Please try again.",
+      );
+      return;
+    }
+
+    if (signIn.status === "complete") {
+      await signIn.finalize({ navigate: () => { router.replace("/"); } });
     }
   }
+
+  const loading = fetchStatus === "fetching";
 
   return (
     <View style={styles.form}>
@@ -135,7 +143,6 @@ function LoginForm({
         <View style={[styles.errorBox, { backgroundColor: "#ff4d4f20", borderColor: "#ff4d4f50" }]}>
           <Text style={[styles.errorText, { color: "#ff6b6b", fontFamily: "Inter_400Regular" }]}>
             {error}
-            {needsVerify ? "\nCheck your inbox for the verification link." : ""}
           </Text>
         </View>
       )}
@@ -166,11 +173,6 @@ function LoginForm({
           returnKeyType="go"
         />
       </View>
-      <Pressable onPress={onForgot} style={styles.forgotLink}>
-        <Text style={[styles.forgotText, { color: colors.primary, fontFamily: "Inter_400Regular" }]}>
-          Forgot password?
-        </Text>
-      </Pressable>
       <Animated.View style={btnStyle}>
         <Pressable
           testID="login-button"
@@ -193,46 +195,57 @@ function LoginForm({
           )}
         </Pressable>
       </Animated.View>
+      <Pressable onPress={onSignUp} style={styles.switchLink}>
+        <Text style={[styles.switchText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          No account?{" "}
+          <Text style={{ color: colors.primary }}>Create one</Text>
+        </Text>
+      </Pressable>
     </View>
   );
 }
 
-function ForgotForm({
+function SignUpForm({
   colors,
-  onBack,
-  onSent,
+  onSignIn,
+  onVerify,
 }: {
   colors: ReturnType<typeof useColors>;
-  onBack: () => void;
-  onSent: () => void;
+  onSignIn: () => void;
+  onVerify: () => void;
 }) {
+  const { signUp, fetchStatus } = useSignUp();
   const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN ?? ""}`;
 
   async function handleSubmit() {
-    if (!email.includes("@")) { setError("Please enter a valid email."); return; }
-    setError("");
-    setLoading(true);
-    try {
-      await fetch(`${BASE_URL}/api/auth/forgot-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase() }),
-      });
-      onSent();
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setLoading(false);
+    if (!email.trim() || password.length < 8) {
+      setError("A valid email and password (8+ chars) are required.");
+      return;
     }
+    setError("");
+
+    const { error: signUpError } = await signUp.password({
+      emailAddress: email.trim().toLowerCase(),
+      password,
+    });
+
+    if (signUpError) {
+      setError(signUpError.message ?? "Sign-up failed. Please try again.");
+      return;
+    }
+
+    await signUp.verifications.sendEmailCode();
+    onVerify();
   }
+
+  const loading = fetchStatus === "fetching";
 
   return (
     <View style={styles.form}>
       <Text style={[styles.formTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-        Reset password
+        Create account
       </Text>
       {!!error && (
         <View style={[styles.errorBox, { backgroundColor: "#ff4d4f20", borderColor: "#ff4d4f50" }]}>
@@ -249,8 +262,19 @@ function ForgotForm({
           placeholderTextColor={colors.mutedForeground + "80"}
           keyboardType="email-address"
           autoCapitalize="none"
+        />
+      </View>
+      <View style={styles.field}>
+        <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>Password</Text>
+        <TextInput
+          style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.secondary + "60", fontFamily: "Inter_400Regular" }]}
+          value={password}
+          onChangeText={setPassword}
+          placeholder="8+ characters"
+          placeholderTextColor={colors.mutedForeground + "80"}
+          secureTextEntry
           onSubmitEditing={handleSubmit}
-          returnKeyType="send"
+          returnKeyType="go"
         />
       </View>
       <Pressable
@@ -265,34 +289,104 @@ function ForgotForm({
           <ActivityIndicator color={colors.primaryForeground} />
         ) : (
           <Text style={[styles.submitText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>
-            Send reset link
+            Create account
           </Text>
         )}
       </Pressable>
-      <Pressable onPress={onBack} style={styles.backLink}>
-        <Feather name="arrow-left" size={14} color={colors.primary} />
-        <Text style={[styles.backText, { color: colors.primary, fontFamily: "Inter_400Regular" }]}>
-          Back to sign in
+      <Pressable onPress={onSignIn} style={styles.switchLink}>
+        <Text style={[styles.switchText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          Already have one?{" "}
+          <Text style={{ color: colors.primary }}>Sign in</Text>
         </Text>
       </Pressable>
     </View>
   );
 }
 
-function ForgotSentMessage({ colors, onBack }: { colors: ReturnType<typeof useColors>; onBack: () => void }) {
+function VerifyEmailForm({
+  colors,
+  onBack,
+}: {
+  colors: ReturnType<typeof useColors>;
+  onBack: () => void;
+}) {
+  const { signUp, fetchStatus } = useSignUp();
+  const router = useRouter();
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+
+  async function handleVerify() {
+    if (!code.trim()) { setError("Please enter the verification code."); return; }
+    setError("");
+
+    await signUp.verifications.verifyEmailCode({ code });
+
+    if (signUp.status === "complete") {
+      await signUp.finalize({ navigate: () => { router.replace("/"); } });
+    } else {
+      setError("Verification failed. Please check the code and try again.");
+    }
+  }
+
+  const loading = fetchStatus === "fetching";
+
   return (
     <View style={styles.form}>
       <View style={[styles.infoBox, { backgroundColor: colors.primary + "20", borderColor: colors.primary + "50" }]}>
         <Feather name="mail" size={24} color={colors.primary} style={{ marginBottom: 8 }} />
-        <Text style={[styles.infoTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Check your inbox</Text>
+        <Text style={[styles.infoTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+          Check your inbox
+        </Text>
         <Text style={[styles.infoText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-          If an account exists, you'll receive a reset link shortly.
+          We sent a verification code to your email. Enter it below to continue.
         </Text>
       </View>
+      {!!error && (
+        <View style={[styles.errorBox, { backgroundColor: "#ff4d4f20", borderColor: "#ff4d4f50" }]}>
+          <Text style={[styles.errorText, { color: "#ff6b6b", fontFamily: "Inter_400Regular" }]}>{error}</Text>
+        </View>
+      )}
+      <View style={styles.field}>
+        <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>Verification code</Text>
+        <TextInput
+          style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.secondary + "60", fontFamily: "Inter_400Regular" }]}
+          value={code}
+          onChangeText={setCode}
+          placeholder="Enter code"
+          placeholderTextColor={colors.mutedForeground + "80"}
+          keyboardType="number-pad"
+          onSubmitEditing={handleVerify}
+          returnKeyType="go"
+        />
+      </View>
+      <Pressable
+        onPress={handleVerify}
+        disabled={loading}
+        style={({ pressed }) => [
+          styles.submitButton,
+          { backgroundColor: colors.primary, opacity: pressed || loading ? 0.8 : 1, borderRadius: colors.radius },
+        ]}
+      >
+        {loading ? (
+          <ActivityIndicator color={colors.primaryForeground} />
+        ) : (
+          <Text style={[styles.submitText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>
+            Verify email
+          </Text>
+        )}
+      </Pressable>
+      <Pressable
+        onPress={() => signUp.verifications.sendEmailCode()}
+        style={styles.switchLink}
+      >
+        <Text style={[styles.switchText, { color: colors.primary, fontFamily: "Inter_400Regular" }]}>
+          Resend code
+        </Text>
+      </Pressable>
       <Pressable onPress={onBack} style={styles.backLink}>
         <Feather name="arrow-left" size={14} color={colors.primary} />
         <Text style={[styles.backText, { color: colors.primary, fontFamily: "Inter_400Regular" }]}>
-          Back to sign in
+          Back
         </Text>
       </Pressable>
     </View>
@@ -314,6 +408,9 @@ const styles = StyleSheet.create({
   formTitle: { fontSize: 20, marginBottom: 4, textAlign: "center" },
   errorBox: { borderWidth: 1, borderRadius: 10, padding: 12 },
   errorText: { fontSize: 13, lineHeight: 18 },
+  infoBox: { borderWidth: 1, borderRadius: 12, padding: 20, alignItems: "center", gap: 4 },
+  infoTitle: { fontSize: 16 },
+  infoText: { fontSize: 13, textAlign: "center", lineHeight: 18 },
   field: { gap: 6 },
   label: { fontSize: 13 },
   input: {
@@ -321,16 +418,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 12,
     fontSize: 15,
   },
-  forgotLink: { alignSelf: "flex-end", marginTop: -8 },
-  forgotText: { fontSize: 13 },
   submitButton: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     gap: 8, paddingVertical: 15, marginTop: 4,
   },
   submitText: { fontSize: 16 },
+  switchLink: { alignItems: "center", marginTop: 4 },
+  switchText: { fontSize: 13 },
   backLink: { flexDirection: "row", alignItems: "center", gap: 6, justifyContent: "center", marginTop: 4 },
   backText: { fontSize: 13 },
-  infoBox: { borderWidth: 1, borderRadius: 12, padding: 20, alignItems: "center", gap: 4 },
-  infoTitle: { fontSize: 16 },
-  infoText: { fontSize: 13, textAlign: "center", lineHeight: 18 },
 });

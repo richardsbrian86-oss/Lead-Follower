@@ -3,17 +3,43 @@ import { Link, useLocation } from "wouter";
 import { Users, Plus, Menu, CalendarClock, LayoutDashboard, BarChart2, LogOut, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { useAuth } from "@workspace/replit-auth-web";
+import { useUser, useClerk } from "@clerk/react";
+import { useQuery } from "@tanstack/react-query";
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
+interface DbUser {
+  id: string;
+  email: string | null;
+  name: string | null;
+  role: string;
+  gymId: string | null;
+  firstName: string | null;
+  lastName: string | null;
+}
+
+function useDbUser() {
+  return useQuery<{ user: DbUser }>({
+    queryKey: ["me"],
+    queryFn: () =>
+      fetch("/api/me", { credentials: "include" }).then((r) => {
+        if (!r.ok) throw new Error("Failed to fetch user");
+        return r.json();
+      }),
+    staleTime: 30_000,
+  });
+}
+
 export function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
-  const { user, logout } = useAuth();
+  const { user: clerkUser } = useUser();
+  const { signOut } = useClerk();
+  const { data: meData } = useDbUser();
 
-  const isOwner = user?.role === "owner";
+  const dbUser = meData?.user;
+  const isOwner = dbUser?.role === "owner";
 
   const navItems = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -23,16 +49,17 @@ export function Layout({ children }: LayoutProps) {
     ...(isOwner ? [{ href: "/team", label: "Team", icon: UserPlus }] : []),
   ];
 
-  const initials = user
-    ? [user.firstName, user.lastName]
-        .filter(Boolean)
-        .map((n) => n![0].toUpperCase())
-        .join("") || "U"
-    : "FS";
+  const firstName = clerkUser?.firstName ?? dbUser?.firstName ?? null;
+  const lastName = clerkUser?.lastName ?? dbUser?.lastName ?? null;
+  const email = clerkUser?.primaryEmailAddress?.emailAddress ?? dbUser?.email ?? null;
+  const profileImageUrl = clerkUser?.imageUrl ?? null;
 
-  const displayName = user
-    ? [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "User"
-    : "Flow State";
+  const initials = [firstName, lastName]
+    .filter(Boolean)
+    .map((n) => n![0].toUpperCase())
+    .join("") || "FS";
+
+  const displayName = [firstName, lastName].filter(Boolean).join(" ") || email || "User";
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-sidebar border-r border-sidebar-border">
@@ -78,9 +105,9 @@ export function Layout({ children }: LayoutProps) {
 
       <div className="p-4 border-t border-sidebar-border mt-auto">
         <div className="flex items-center gap-3">
-          {user?.profileImageUrl ? (
+          {profileImageUrl ? (
             <img
-              src={user.profileImageUrl}
+              src={profileImageUrl}
               alt={displayName}
               className="w-8 h-8 rounded-full object-cover border border-primary/30"
             />
@@ -91,14 +118,10 @@ export function Layout({ children }: LayoutProps) {
           )}
           <div className="text-sm flex-1 min-w-0">
             <div className="font-semibold text-sidebar-foreground truncate">{displayName}</div>
-            {user?.gymName ? (
-              <div className="text-muted-foreground text-xs truncate">{user.gymName}</div>
-            ) : (
-              <div className="text-muted-foreground text-xs truncate">{user?.email ?? "Sales Manager"}</div>
-            )}
+            <div className="text-muted-foreground text-xs truncate">{email ?? "Sales Manager"}</div>
           </div>
           <button
-            onClick={logout}
+            onClick={() => signOut({ redirectUrl: import.meta.env.BASE_URL || "/" })}
             title="Sign out"
             className="p-1.5 rounded-md text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors flex-shrink-0"
           >

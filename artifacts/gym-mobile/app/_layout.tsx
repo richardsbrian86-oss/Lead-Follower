@@ -6,8 +6,10 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { setAuthTokenGetter, setBaseUrl } from "@workspace/api-client-react";
+import { ClerkProvider, ClerkLoaded, useAuth } from "@clerk/expo";
+import { tokenCache } from "@clerk/expo/token-cache";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack, useRouter, useSegments } from "expo-router";
+import { Redirect, Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -15,11 +17,12 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { AuthProvider, TOKEN_KEY, useAuth } from "@/context/AuthContext";
-import { getItem } from "@/utils/storage";
 
-setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
-setAuthTokenGetter(() => getItem(TOKEN_KEY));
+const domain = process.env.EXPO_PUBLIC_DOMAIN;
+if (domain) setBaseUrl(`https://${domain}`);
+
+const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
+const proxyUrl = process.env.EXPO_PUBLIC_CLERK_PROXY_URL || undefined;
 
 SplashScreen.preventAutoHideAsync();
 
@@ -32,18 +35,44 @@ const queryClient = new QueryClient({
   },
 });
 
+// AuthGate: conditionally mounts the login screen or the authenticated stack
+// based on Clerk's auth state. Using synchronous conditional rendering (not
+// an effect) ensures the authenticated routes never mount while signed out.
 function AuthGate() {
-  // DEV BYPASS: login disabled during development — re-enable before deploying to live gyms
   const segments = useSegments();
-  const router = useRouter();
+  const { isSignedIn, isLoaded, getToken } = useAuth();
 
+  // Wire the API client to the current auth state. Cleared to null on sign-out
+  // or component unmount so stale Bearer tokens never leak.
   useEffect(() => {
-    // Redirect away from login screen since auth is bypassed
-    if (segments[0] === "login") {
-      router.replace("/");
+    if (isSignedIn) {
+      setAuthTokenGetter(() => getToken());
+    } else {
+      setAuthTokenGetter(() => Promise.resolve(null));
     }
-  }, [segments]);
+    return () => {
+      setAuthTokenGetter(() => Promise.resolve(null));
+    };
+  }, [isSignedIn, getToken]);
 
+  // Wait for Clerk to resolve auth state (ClerkLoaded parent guarantees this,
+  // but guard defensively so we never render the wrong branch).
+  if (!isLoaded) return null;
+
+  const inLoginRoute = segments[0] === "login";
+
+  // Not signed in and trying to access an authenticated route: redirect to
+  // login synchronously so the tabs Stack never mounts.
+  if (!isSignedIn && !inLoginRoute) {
+    return <Redirect href="/login" />;
+  }
+
+  // Signed in but on the login screen: redirect to tabs synchronously.
+  if (isSignedIn && inLoginRoute) {
+    return <Redirect href="/" />;
+  }
+
+  // Correct auth state for the current route — render the full navigator.
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="login" options={{ headerShown: false }} />
@@ -78,15 +107,21 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <KeyboardProvider>
-              <AuthProvider>
-                <AuthGate />
-              </AuthProvider>
-            </KeyboardProvider>
-          </GestureHandlerRootView>
-        </QueryClientProvider>
+        <ClerkProvider
+          publishableKey={publishableKey}
+          tokenCache={tokenCache}
+          proxyUrl={proxyUrl}
+        >
+          <ClerkLoaded>
+            <QueryClientProvider client={queryClient}>
+              <GestureHandlerRootView style={{ flex: 1 }}>
+                <KeyboardProvider>
+                  <AuthGate />
+                </KeyboardProvider>
+              </GestureHandlerRootView>
+            </QueryClientProvider>
+          </ClerkLoaded>
+        </ClerkProvider>
       </ErrorBoundary>
     </SafeAreaProvider>
   );

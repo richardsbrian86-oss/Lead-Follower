@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@workspace/replit-auth-web";
 import { UserPlus, Trash2, Users, Mail, Clock, RefreshCw, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useUser } from "@clerk/react";
 
 interface Member {
   id: string;
@@ -19,6 +19,12 @@ interface Invite {
   expiresAt: string;
   createdAt: string;
   inviterName: string | null;
+}
+
+interface DbUser {
+  id: string;
+  role: string;
+  gymId: string | null;
 }
 
 interface InvitesResponse {
@@ -40,12 +46,24 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export default function Team() {
-  const { user } = useAuth();
+  const { user: clerkUser } = useUser();
   const queryClient = useQueryClient();
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteError, setInviteError] = useState("");
   const [resendSuccess, setResendSuccess] = useState<string | null>(null);
   const [resendError, setResendError] = useState<{ token: string; message: string } | null>(null);
+
+  // Get local DB user (for role / gymId)
+  const { data: meData } = useQuery<{ user: DbUser }>({
+    queryKey: ["me"],
+    queryFn: () => apiFetch<{ user: DbUser }>("/api/me"),
+    staleTime: 30_000,
+  });
+  const dbUser = meData?.user;
+  const isOwner = dbUser?.role === "owner";
+
+  // Use externalId (migrated Replit Auth ID) or Clerk native ID for comparisons
+  const currentUserId = clerkUser ? (clerkUser.externalId ?? clerkUser.id) : undefined;
 
   const membersQuery = useQuery({
     queryKey: ["team-members"],
@@ -103,8 +121,6 @@ export default function Team() {
       queryClient.invalidateQueries({ queryKey: ["team-members"] });
     },
   });
-
-  const isOwner = user?.role === "owner";
 
   function handleInviteSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -209,7 +225,7 @@ export default function Team() {
                   <span className="text-xs text-muted-foreground hidden sm:block">
                     Joined {new Date(m.createdAt).toLocaleDateString()}
                   </span>
-                  {isOwner && m.role !== "owner" && m.id !== user?.id && (
+                  {isOwner && m.role !== "owner" && m.id !== dbUser?.id && m.id !== currentUserId && (
                     <button
                       type="button"
                       onClick={() => {

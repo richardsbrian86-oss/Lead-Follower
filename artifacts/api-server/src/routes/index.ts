@@ -1,6 +1,4 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { eq } from "drizzle-orm";
-import { db, usersTable } from "@workspace/db";
 import healthRouter from "./health";
 import leadsRouter from "./leads";
 import messagingRouter from "./messaging";
@@ -9,78 +7,37 @@ import analyticsRouter from "./analytics";
 import anthropicRouter from "./anthropic/index";
 import authRouter from "./auth";
 import invitesRouter from "./invites";
+import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
 // ─── Intentionally public routes (no session required) ───────────────────────
 //
 //   GET  /healthz                        — liveness probe; must stay public
-//   GET  /auth/user                      — lets the SPA check auth state before
-//                                          deciding whether to show the login gate;
-//                                          returns { user: null } when unauthenticated
-//   POST /auth/register                  — creates a new account (email + password)
-//   POST /auth/login                     — validates credentials, issues session
-//   GET  /auth/verify-email              — confirms email via token link (redirects)
-//   POST /auth/forgot-password           — sends password reset email
-//   POST /auth/reset-password            — sets a new password via reset token
-//   GET  /logout                         — clears the session cookie, returns JSON
+//   GET  /auth/invite/:token             — validates invite link (public)
 //
-// Every other /api/* route is protected by requireAuth + requireGym below.
+// Auth-gated but no gym required:
+//   GET  /me                             — current user info (uses inline requireAuth)
+//   POST /gyms                           — create gym during owner onboarding
+//
+// Every other /api/* route requires a valid Clerk session AND an assigned gym.
 // ─────────────────────────────────────────────────────────────────────────────
 router.use(healthRouter);
 router.use(authRouter);
 
-// All business routes require a valid session ─────────────────────────────────
-function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-  next();
-}
+// All business routes require a valid Clerk session ───────────────────────────
+router.use(requireAuth as (req: Request, res: Response, next: NextFunction) => void);
 
-// All business routes require a gym — protects against users who registered but
-// haven't been assigned to a gym yet (e.g. during owner onboarding flow).
+// All business routes require a gym — protects against users who just signed
+// up and haven't been assigned to a gym yet.
 function requireGym(req: Request, res: Response, next: NextFunction) {
-  if (!req.user?.gymId) {
+  if (!req.dbUser?.gymId) {
     res.status(403).json({ error: "No gym assigned to your account. Contact your administrator." });
     return;
   }
   next();
 }
 
-// DEV BYPASS: auto-inject the first owner user so API calls work without a session.
-// Remove this block (and the db/eq imports above) before deploying to live gyms.
-if (process.env.NODE_ENV !== "production") {
-  router.use(async (req: Request, _res: Response, next: NextFunction) => {
-    if (req.isAuthenticated()) { next(); return; }
-    try {
-      const [owner] = await db
-        .select()
-        .from(usersTable)
-        .where(eq(usersTable.gymId, "00000000-0000-0000-0000-000000000001"))
-        .limit(1);
-      if (owner) {
-        req.user = {
-          id: owner.id,
-          email: owner.email ?? null,
-          name: owner.name ?? null,
-          // Forced to "owner" so every page (including owner-only ones like
-          // Team) is reachable while login is disabled — the real DB row
-          // may be a "staff" account since no owner exists in dev data.
-          role: "owner",
-          gymId: owner.gymId ?? undefined,
-          firstName: owner.firstName ?? null,
-          lastName: owner.lastName ?? null,
-          profileImageUrl: owner.profileImageUrl ?? null,
-        };
-      }
-    } catch { /* ignore */ }
-    next();
-  });
-}
-
-router.use(requireAuth as (req: Request, res: Response, next: NextFunction) => void);
 router.use(requireGym as (req: Request, res: Response, next: NextFunction) => void);
 
 router.use(leadsRouter);

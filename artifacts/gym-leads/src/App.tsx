@@ -1,5 +1,5 @@
-import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
@@ -12,8 +12,18 @@ import Sequences from "@/pages/sequences";
 import Analytics from "@/pages/analytics";
 import Team from "@/pages/team";
 import { useKeepAlive } from "@/hooks/use-keep-alive";
-import { useAuth, AuthProvider } from "@workspace/replit-auth-web";
-import { useState, useEffect } from "react";
+import {
+  ClerkProvider,
+  SignIn,
+  SignUp,
+  Show,
+  useClerk,
+  useUser,
+  useAuth,
+} from "@clerk/react";
+import { publishableKeyFromHost } from "@clerk/react/internal";
+import { dark } from "@clerk/themes";
+import { useEffect, useRef, useState } from "react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,7 +34,285 @@ const queryClient = new QueryClient({
   },
 });
 
-function Router() {
+// ─── Clerk wiring ─────────────────────────────────────────────────────────────
+// REQUIRED — copy verbatim. Resolves the key from window.location.hostname.
+const clerkPubKey = publishableKeyFromHost(
+  window.location.hostname,
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+);
+
+// REQUIRED — copy verbatim. Empty in dev (Clerk hits FAPI directly), auto-set in prod.
+// Always proxy Clerk FAPI through our server so session cookies work on the
+// same domain in all environments. VITE_CLERK_PROXY_URL can override this
+// for custom setups; otherwise /api/__clerk is the default route.
+const clerkProxyUrl: string = import.meta.env.VITE_CLERK_PROXY_URL ?? "/api/__clerk";
+
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+// Strip base path so wouter's setLocation doesn't double it.
+function stripBase(path: string): string {
+  return basePath && path.startsWith(basePath)
+    ? path.slice(basePath.length) || "/"
+    : path;
+}
+
+if (!clerkPubKey) {
+  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
+}
+
+const clerkAppearance = {
+  theme: dark,
+  cssLayerName: "clerk",
+  options: {
+    logoPlacement: "inside" as const,
+    logoLinkUrl: basePath || "/",
+    logoImageUrl: `${window.location.origin}${basePath}/flow-state-logo.png`,
+  },
+  variables: {
+    colorPrimary: "#00c8f0",
+    colorForeground: "#dce8f5",
+    colorMutedForeground: "#7a96b4",
+    colorDanger: "#e84a5f",
+    colorBackground: "#0d1b2a",
+    colorInput: "#1e3448",
+    colorInputForeground: "#dce8f5",
+    colorNeutral: "#1e3448",
+    fontFamily: "'Bricolage Grotesque', sans-serif",
+    borderRadius: "0.5rem",
+  },
+  elements: {
+    rootBox: "w-full flex justify-center",
+    cardBox: "bg-[#152236] rounded-2xl w-[440px] max-w-full overflow-hidden border border-[#1e3448]",
+    card: "!shadow-none !border-0 !bg-transparent !rounded-none",
+    footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
+    headerTitle: "text-[#dce8f5]",
+    headerSubtitle: "text-[#7a96b4]",
+    socialButtonsBlockButtonText: "text-[#dce8f5]",
+    formFieldLabel: "text-[#dce8f5]",
+    footerActionLink: "text-[#00c8f0]",
+    footerActionText: "text-[#7a96b4]",
+    dividerText: "text-[#7a96b4]",
+    identityPreviewEditButton: "text-[#00c8f0]",
+    formFieldSuccessText: "text-green-400",
+    alertText: "text-[#dce8f5]",
+    logoBox: "flex justify-center pb-1",
+    logoImage: "h-10 w-auto object-contain",
+    socialButtonsBlockButton: "border border-[#1e3448] bg-[#0d1b2a] hover:bg-[#1e3448]",
+    formButtonPrimary: "bg-[#00c8f0] text-[#091420] hover:bg-[#0099bb]",
+    formFieldInput: "bg-[#1e3448] border-[#2a4a6a] text-[#dce8f5]",
+    footerAction: "",
+    dividerLine: "bg-[#1e3448]",
+    alert: "border-[#1e3448] bg-[#0d1b2a]",
+    otpCodeFieldInput: "bg-[#1e3448] border-[#2a4a6a] text-[#dce8f5]",
+    formFieldRow: "",
+    main: "",
+  },
+};
+
+// ─── Auth cache invalidation ──────────────────────────────────────────────────
+function ClerkQueryClientCacheInvalidator() {
+  const { addListener } = useClerk();
+  const qc = useQueryClient();
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    const unsubscribe = addListener(({ user }) => {
+      const userId = user?.id ?? null;
+      if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
+        qc.clear();
+      }
+      prevUserIdRef.current = userId;
+    });
+    return unsubscribe;
+  }, [addListener, qc]);
+
+  return null;
+}
+
+// ─── Gym Setup (new owners without a gym) ────────────────────────────────────
+function GymSetupPage() {
+  const { signOut } = useClerk();
+  const qc = useQueryClient();
+  const [gymName, setGymName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!gymName.trim()) { setError("Gym name is required."); return; }
+    setError("");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/gyms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ gymName }),
+      });
+      if (res.ok) {
+        // Invalidate the ["me"] query so HomeRedirect refetches and transitions
+        // to AuthedApp automatically — no navigation needed.
+        await qc.invalidateQueries({ queryKey: ["me"] });
+      } else {
+        const data = await res.json();
+        setError((data as { error?: string }).error ?? "Failed to create gym.");
+      }
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        <div className="flex flex-col items-center gap-3 mb-8">
+          <img src="/flow-state-logo.png" alt="Flow State CRM" className="w-40 h-auto object-contain" />
+          <h1 className="text-2xl font-bold text-foreground">Set up your gym</h1>
+          <p className="text-sm text-muted-foreground text-center">
+            Create your gym to start tracking leads and managing your team.
+          </p>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4 bg-card border border-border rounded-xl p-6">
+          {error && (
+            <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+          <div className="space-y-1">
+            <label htmlFor="gymName" className="text-sm font-medium text-foreground">Gym name</label>
+            <input
+              id="gymName"
+              type="text"
+              value={gymName}
+              onChange={(e) => setGymName(e.target.value)}
+              placeholder="CrossFit Central"
+              className="w-full px-3 py-2 rounded-lg border border-border text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-2.5 rounded-lg font-semibold text-sm transition-all disabled:opacity-60"
+            style={{
+              background: "linear-gradient(135deg, #00c8f0 0%, #0099bb 100%)",
+              color: "#0d1b2a",
+              boxShadow: "0 4px 24px rgba(0,200,240,0.25)",
+            }}
+          >
+            {loading ? "Creating…" : "Create gym"}
+          </button>
+          <p className="text-center text-xs text-muted-foreground">
+            <button type="button" onClick={() => signOut({ redirectUrl: basePath || "/" })} className="text-primary hover:underline">
+              Sign out
+            </button>
+          </p>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Accept Invite page ───────────────────────────────────────────────────────
+function AcceptInvitePage() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("token") ?? "";
+  const [, setLocation] = useLocation();
+  const [info, setInfo] = useState<{ email: string; gymName: string } | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!token) { setError("Invalid invite link."); setLoading(false); return; }
+    fetch(`/api/auth/invite/${token}`, { credentials: "include" })
+      .then((r) => r.ok ? r.json() : r.json().then((d: { error?: string }) => Promise.reject(d.error ?? "Invalid")))
+      .then((d: { email: string; gymName: string }) => { setInfo(d); setLoading(false); })
+      .catch((err: string) => { setError(err || "This invite link is invalid or has expired."); setLoading(false); });
+  }, [token]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground text-sm">Checking your invite…</p>
+      </div>
+    );
+  }
+
+  if (error || !info) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="w-full max-w-md text-center space-y-4">
+          <img src="/flow-state-logo.png" alt="Flow State CRM" className="w-40 h-auto object-contain mx-auto" />
+          <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20">
+            <p className="font-semibold text-destructive">Invite link invalid</p>
+            <p className="text-sm text-muted-foreground mt-1">{error || "This invite link has expired."}</p>
+          </div>
+          <button type="button" onClick={() => setLocation("/")} className="text-primary hover:underline text-sm">
+            ← Back to home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center px-4">
+      <div className="w-full max-w-md text-center space-y-6">
+        <img src="/flow-state-logo.png" alt="Flow State CRM" className="w-40 h-auto object-contain mx-auto" />
+        <div className="bg-card border border-border rounded-xl p-6 space-y-4">
+          <div>
+            <h2 className="text-xl font-bold text-foreground">Join {info.gymName}</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              You've been invited to join as a staff member.
+            </p>
+          </div>
+          <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 text-sm text-foreground">
+            Sign up with: <strong>{info.email}</strong>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Create your account with the email above. You'll automatically be added to {info.gymName} after signing in.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              // Store invite context so SignUpPage can pre-fill the email.
+              // JIT provisioning on the server matches by email, so signing up with
+              // the correct address automatically assigns the gym from the invite.
+              sessionStorage.setItem("inviteEmail", info.email);
+              sessionStorage.setItem("inviteToken", token);
+              setLocation(`/sign-up`);
+            }}
+            className="w-full py-2.5 rounded-lg font-semibold text-sm"
+            style={{
+              background: "linear-gradient(135deg, #00c8f0 0%, #0099bb 100%)",
+              color: "#0d1b2a",
+              boxShadow: "0 4px 24px rgba(0,200,240,0.25)",
+            }}
+          >
+            Create account
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              // Preserve invite context for the sign-in path too, so
+              // HomeRedirect can call /auth/consume-invite after sign-in.
+              sessionStorage.setItem("inviteEmail", info.email);
+              sessionStorage.setItem("inviteToken", token);
+              setLocation("/sign-in");
+            }}
+            className="text-primary hover:underline text-sm block w-full"
+          >
+            Already have an account? Sign in
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Authenticated app (with gym) ────────────────────────────────────────────
+function AuthedApp() {
   return (
     <Layout>
       <Switch>
@@ -41,515 +329,204 @@ function Router() {
   );
 }
 
-type AuthView = "login" | "register" | "forgot" | "check-email" | "reset-password" | "accept-invite";
+// ─── Home redirect ────────────────────────────────────────────────────────────
+function HomeRedirect() {
+  const { isLoaded, isSignedIn } = useAuth();
+  const qc = useQueryClient();
 
-function LoginGate() {
-  // DEV BYPASS: login disabled during development — re-enable before deploying to live gyms
-  return <Router />;
-}
-
-function Logo() {
-  return (
-    <div className="flex flex-col items-center gap-3 mb-6">
-      <img
-        src="/flow-state-logo.png"
-        alt="Flow State CRM"
-        className="w-48 h-auto object-contain"
-        onError={(e) => {
-          (e.target as HTMLImageElement).style.display = "none";
-        }}
-      />
-      <div className="text-center">
-        <h1 className="text-2xl font-bold" style={{ color: "#0d1b2a" }}>Flow State</h1>
-        <p className="text-sm text-muted-foreground">Gym Lead CRM</p>
-      </div>
-    </div>
-  );
-}
-
-function InputField({ label, type, value, onChange, placeholder, error, readOnly, id: idProp }: {
-  label: string; type: string; value: string;
-  onChange: (v: string) => void; placeholder?: string; error?: string; readOnly?: boolean; id?: string;
-}) {
-  const id = idProp ?? label.toLowerCase().replace(/\s+/g, "-");
-  return (
-    <div className="space-y-1">
-      <label htmlFor={id} className="text-sm font-medium text-foreground">{label}</label>
-      <input
-        id={id}
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        readOnly={readOnly}
-        className={`w-full px-3 py-2 rounded-lg border text-sm bg-background focus:outline-none focus:ring-2 transition-all ${
-          readOnly ? "opacity-60 cursor-not-allowed" :
-          error ? "border-destructive focus:ring-destructive/20" : "border-border focus:ring-primary/20"
-        }`}
-      />
-      {error && <p className="text-xs text-destructive">{error}</p>}
-    </div>
-  );
-}
-
-function SubmitButton({ children, loading, disabled }: { children: React.ReactNode; loading?: boolean; disabled?: boolean }) {
-  return (
-    <button
-      type="submit"
-      disabled={loading || disabled}
-      className="w-full py-2.5 rounded-lg font-semibold text-sm transition-all disabled:opacity-60"
-      style={{
-        background: "linear-gradient(135deg, #00c8f0 0%, #0099bb 100%)",
-        color: "#0d1b2a",
-        boxShadow: "0 4px 24px rgba(0,200,240,0.25)",
-      }}
-    >
-      {loading ? "Please wait…" : children}
-    </button>
-  );
-}
-
-function LoginForm({
-  onRegister,
-  onForgot,
-  onSuccess,
-  verifiedBanner,
-  onDismissBanner,
-}: {
-  onRegister: () => void;
-  onForgot: () => void;
-  onSuccess: () => void;
-  verifiedBanner?: "success" | "error" | null;
-  onDismissBanner?: () => void;
-}) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [needsVerify, setNeedsVerify] = useState(false);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setNeedsVerify(false);
-    setLoading(true);
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        onSuccess();
-      } else if (data.code === "EMAIL_NOT_VERIFIED") {
-        setNeedsVerify(true);
-        setError(data.error);
-      } else {
-        setError(data.error || "Sign in failed.");
+  // Consume any pending invite token once on sign-in, then invalidate ["me"]
+  // so the query below refetches with the newly assigned gymId.
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    const inviteToken = sessionStorage.getItem("inviteToken");
+    if (!inviteToken) return;
+    (async () => {
+      try {
+        await fetch("/api/auth/consume-invite", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ token: inviteToken }),
+        });
+      } catch { /* non-fatal */ } finally {
+        sessionStorage.removeItem("inviteToken");
+        sessionStorage.removeItem("inviteEmail");
+        qc.invalidateQueries({ queryKey: ["me"] });
       }
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
+    })();
+  }, [isLoaded, isSignedIn, qc]);
+
+  // Use TanStack Query so cache invalidation (from GymSetupPage on creation)
+  // automatically triggers a refetch and re-renders with the new gymId.
+  const { data: meData, isLoading: meLoading } = useQuery<{ user?: { gymId: string | null } }>({
+    queryKey: ["me"],
+    queryFn: () =>
+      fetch("/api/me", { credentials: "include" })
+        .then((r) => r.json()),
+    enabled: isLoaded && !!isSignedIn,
+    staleTime: 30_000,
+  });
+
+  if (!isLoaded) return null;
+
+  const gymId = meData?.user?.gymId ?? null;
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <Logo />
-      <h2 className="text-lg font-semibold text-center text-foreground">Welcome back</h2>
+    <>
+      <Show when="signed-out">
+        <LandingPage />
+      </Show>
+      <Show when="signed-in">
+        {meLoading || meData === undefined ? (
+          // Still loading gym info
+          null
+        ) : gymId ? (
+          // Signed in with gym — show app
+          <AuthedApp />
+        ) : (
+          // Signed in but no gym — show setup
+          <GymSetupPage />
+        )}
+      </Show>
+    </>
+  );
+}
 
-      {verifiedBanner === "success" && (
-        <div className="p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700 flex items-start justify-between gap-2">
-          <span>Email verified — sign in below</span>
-          {onDismissBanner && (
-            <button type="button" onClick={onDismissBanner} className="text-green-500 hover:text-green-700 flex-shrink-0">✕</button>
-          )}
+// ─── Landing page for unauthenticated users ───────────────────────────────────
+function LandingPage() {
+  const [, setLocation] = useLocation();
+  return (
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 gap-8">
+      <div className="flex flex-col items-center gap-4 text-center">
+        <img src="/flow-state-logo.png" alt="Flow State CRM" className="w-52 h-auto object-contain" />
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Flow State</h1>
+          <p className="text-muted-foreground mt-1">Gym Lead CRM — track, follow up, convert.</p>
         </div>
-      )}
-      {verifiedBanner === "error" && (
-        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive flex items-start justify-between gap-2">
-          <span>Verification link is invalid or has expired. Please request a new one.</span>
-          {onDismissBanner && (
-            <button type="button" onClick={onDismissBanner} className="text-destructive/60 hover:text-destructive flex-shrink-0">✕</button>
-          )}
-        </div>
-      )}
-
-      {error && (
-        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive">
-          {error}
-          {needsVerify && <span className="block mt-1 text-xs opacity-80">Check your inbox for the verification link.</span>}
-        </div>
-      )}
-      <InputField label="Email" type="email" value={email} onChange={setEmail} placeholder="you@example.com" />
-      <InputField label="Password" type="password" value={password} onChange={setPassword} placeholder="Your password" />
-      <div className="text-right">
-        <button type="button" onClick={onForgot} className="text-xs text-primary hover:underline">
-          Forgot password?
-        </button>
       </div>
-      <SubmitButton loading={loading}>Sign in</SubmitButton>
-      <p className="text-center text-sm text-muted-foreground">
-        No account?{" "}
-        <button type="button" onClick={onRegister} className="text-primary font-medium hover:underline">
-          Create one
-        </button>
-      </p>
-    </form>
-  );
-}
-
-function RegisterForm({ onLogin, onSuccess }: { onLogin: () => void; onSuccess: (email: string) => void }) {
-  const [name, setName] = useState("");
-  const [gymName, setGymName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [serverError, setServerError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  function validate() {
-    const e: Record<string, string> = {};
-    if (!name.trim()) e.name = "Name is required.";
-    if (!gymName.trim()) e.gymName = "Gym name is required.";
-    if (!email.includes("@")) e.email = "Valid email is required.";
-    if (password.length < 8) e.password = "At least 8 characters.";
-    return e;
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const errs = validate();
-    setErrors(errs);
-    if (Object.keys(errs).length > 0) return;
-    setServerError("");
-    setLoading(true);
-    try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name, gymName, email, password }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        onSuccess(email);
-      } else {
-        setServerError(data.error || "Registration failed.");
-      }
-    } catch {
-      setServerError("Network error. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <Logo />
-      <h2 className="text-lg font-semibold text-center text-foreground">Create your account</h2>
-      {serverError && (
-        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive">
-          {serverError}
-        </div>
-      )}
-      <InputField label="Your name" type="text" value={name} onChange={setName} placeholder="Jane Smith" error={errors.name} />
-      <InputField label="Gym name" type="text" value={gymName} onChange={setGymName} placeholder="CrossFit Central" error={errors.gymName} />
-      <InputField label="Email" type="email" value={email} onChange={setEmail} placeholder="you@example.com" error={errors.email} />
-      <InputField label="Password" type="password" value={password} onChange={setPassword} placeholder="8+ characters" error={errors.password} />
-      <SubmitButton loading={loading}>Create account</SubmitButton>
-      <p className="text-center text-sm text-muted-foreground">
-        Already have one?{" "}
-        <button type="button" onClick={onLogin} className="text-primary font-medium hover:underline">
-          Sign in
-        </button>
-      </p>
-    </form>
-  );
-}
-
-function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
-  const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email.includes("@")) { setError("Valid email is required."); return; }
-    setError("");
-    setLoading(true);
-    try {
-      await fetch("/api/auth/forgot-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email }),
-      });
-      setSent(true);
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <Logo />
-      <h2 className="text-lg font-semibold text-center text-foreground">Reset your password</h2>
-      {sent ? (
-        <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 text-sm text-foreground text-center">
-          If an account exists for <strong>{email}</strong>, you'll receive a reset link shortly.
-        </div>
-      ) : (
-        <>
-          {error && <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive">{error}</div>}
-          <InputField label="Email" type="email" value={email} onChange={setEmail} placeholder="you@example.com" />
-          <SubmitButton loading={loading}>Send reset link</SubmitButton>
-        </>
-      )}
-      <p className="text-center text-sm">
-        <button type="button" onClick={onBack} className="text-primary hover:underline text-sm">
-          ← Back to sign in
-        </button>
-      </p>
-    </form>
-  );
-}
-
-function CheckEmailMessage({ email, onBack }: { email: string; onBack: () => void }) {
-  const [resendState, setResendState] = useState<"idle" | "loading" | "sent" | "error">("idle");
-
-  async function handleResend() {
-    setResendState("loading");
-    try {
-      const res = await fetch("/api/auth/resend-verification", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email }),
-      });
-      setResendState(res.ok ? "sent" : "error");
-    } catch {
-      setResendState("error");
-    }
-  }
-
-  return (
-    <div className="space-y-4 text-center">
-      <Logo />
-      <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
-        <p className="font-semibold text-foreground">Check your email</p>
-        <p className="text-sm text-muted-foreground mt-1">
-          We sent a verification link{email ? ` to ${email}` : " to your inbox"}. Click it to activate your account, then sign in.
-        </p>
-      </div>
-      {resendState === "sent" && (
-        <div className="p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700">
-          Verification email resent! Check your inbox.
-        </div>
-      )}
-      {resendState === "error" && (
-        <p className="text-sm text-destructive">Failed to resend. Please try again.</p>
-      )}
-      <div className="flex flex-col gap-2">
+      <div className="flex gap-3">
         <button
           type="button"
-          onClick={handleResend}
-          disabled={resendState === "loading" || resendState === "sent"}
-          className="text-primary hover:underline text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => setLocation("/sign-in")}
+          className="px-6 py-2.5 rounded-lg border border-primary text-primary font-semibold text-sm hover:bg-primary/10 transition-colors"
         >
-          {resendState === "loading" ? "Sending…" : resendState === "sent" ? "Email sent ✓" : "Resend verification email"}
+          Sign in
         </button>
-        <button type="button" onClick={onBack} className="text-muted-foreground hover:underline text-sm">
-          ← Back to sign in
+        <button
+          type="button"
+          onClick={() => setLocation("/sign-up")}
+          className="px-6 py-2.5 rounded-lg font-semibold text-sm"
+          style={{ background: "linear-gradient(135deg, #00c8f0 0%, #0099bb 100%)", color: "#0d1b2a" }}
+        >
+          Get started
         </button>
       </div>
     </div>
   );
 }
 
-function AcceptInviteForm({
-  token,
-  onSuccess,
-  onBack,
-}: {
-  token: string;
-  onSuccess: () => void;
-  onBack: () => void;
-}) {
-  const [inviteDetails, setInviteDetails] = useState<{ email: string; gymName: string } | null>(null);
-  const [loadError, setLoadError] = useState("");
-  const [loadingDetails, setLoadingDetails] = useState(true);
-  const [name, setName] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!token) { setLoadError("Invalid invite link."); setLoadingDetails(false); return; }
-    fetch(`/api/auth/invite/${token}`, { credentials: "include" })
-      .then((r) => r.ok ? r.json() : r.json().then((d: { error?: string }) => Promise.reject(d.error ?? "Invalid invite")))
-      .then((d: { email: string; gymName: string }) => { setInviteDetails(d); setLoadingDetails(false); })
-      .catch((err: string) => { setLoadError(err || "This invite link is invalid or has expired."); setLoadingDetails(false); });
-  }, [token]);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!name.trim()) { setError("Your name is required."); return; }
-    if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
-    if (password !== confirm) { setError("Passwords don't match."); return; }
-    setError("");
-    setLoading(true);
-    try {
-      const res = await fetch("/api/auth/accept-invite", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ token, name, password }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        onSuccess();
-      } else {
-        setError((data as { error?: string }).error || "Failed to accept invite.");
-      }
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  if (loadingDetails) {
-    return (
-      <div className="space-y-4 text-center">
-        <Logo />
-        <p className="text-muted-foreground text-sm">Checking your invite…</p>
-      </div>
-    );
-  }
-
-  if (loadError || !inviteDetails) {
-    return (
-      <div className="space-y-4 text-center">
-        <Logo />
-        <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20">
-          <p className="font-semibold text-destructive">Invite link invalid</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            {loadError || "This invite link is invalid or has expired."}
-          </p>
-          <p className="text-xs text-muted-foreground mt-2">Contact your gym owner for a new invite.</p>
-        </div>
-        <button type="button" onClick={onBack} className="text-primary hover:underline text-sm">
-          ← Back to sign in
-        </button>
-      </div>
-    );
-  }
-
+// ─── Sign-in / Sign-up pages ──────────────────────────────────────────────────
+function SignInPage() {
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <Logo />
-      <div className="text-center">
-        <h2 className="text-lg font-semibold text-foreground">Join {inviteDetails.gymName}</h2>
-        <p className="text-sm text-muted-foreground mt-1">Set up your account to get started.</p>
-      </div>
-      {error && (
-        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-      <InputField
-        label="Email"
-        id="invite-email"
-        type="email"
-        value={inviteDetails.email}
-        onChange={() => {}}
-        readOnly
-      />
-      <InputField label="Your name" type="text" value={name} onChange={setName} placeholder="Jane Smith" />
-      <InputField label="Password" type="password" value={password} onChange={setPassword} placeholder="8+ characters" />
-      <InputField label="Confirm password" type="password" value={confirm} onChange={setConfirm} placeholder="Same as above" />
-      <SubmitButton loading={loading}>Join {inviteDetails.gymName}</SubmitButton>
-      <p className="text-center text-sm">
-        <button type="button" onClick={onBack} className="text-primary hover:underline text-sm">
-          ← Back to sign in
-        </button>
-      </p>
-    </form>
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
+    </div>
   );
 }
 
-function ResetPasswordForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () => void }) {
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const token = new URLSearchParams(window.location.search).get("token") ?? "";
+function SignUpPage() {
+  // If the user arrived from an invite link, pre-fill and lock the email address.
+  // sessionStorage is cleared on tab close; the invite page re-sets it each visit.
+  const inviteEmail = sessionStorage.getItem("inviteEmail") ?? undefined;
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <SignUp
+        routing="path"
+        path={`${basePath}/sign-up`}
+        signInUrl={`${basePath}/sign-in`}
+        initialValues={inviteEmail ? { emailAddress: inviteEmail } : undefined}
+      />
+    </div>
+  );
+}
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (password.length < 8) { setError("At least 8 characters required."); return; }
-    if (password !== confirm) { setError("Passwords don't match."); return; }
-    if (!token) { setError("Missing reset token. Please use the link from your email."); return; }
-    setError("");
-    setLoading(true);
-    try {
-      const res = await fetch("/api/auth/reset-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ token, password }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        onSuccess();
-      } else {
-        setError((data as { error?: string }).error || "Reset failed. Please request a new link.");
-      }
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
+// ─── Root provider with Clerk + Wouter ───────────────────────────────────────
+function ClerkProviderWithRoutes() {
+  const [, setLocation] = useLocation();
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <Logo />
-      <h2 className="text-lg font-semibold text-center text-foreground">Set new password</h2>
-      {error && <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive">{error}</div>}
-      <InputField label="New password" type="password" value={password} onChange={setPassword} placeholder="8+ characters" />
-      <InputField label="Confirm password" type="password" value={confirm} onChange={setConfirm} placeholder="Same as above" />
-      <SubmitButton loading={loading}>Set new password</SubmitButton>
-      <p className="text-center text-sm">
-        <button type="button" onClick={onBack} className="text-primary hover:underline text-sm">
-          ← Back to sign in
-        </button>
-      </p>
-    </form>
+    <ClerkProvider
+      publishableKey={clerkPubKey}
+      proxyUrl={clerkProxyUrl}
+      appearance={clerkAppearance}
+      signInUrl={`${basePath}/sign-in`}
+      signUpUrl={`${basePath}/sign-up`}
+      localization={{
+        signIn: { start: { title: "Welcome back", subtitle: "Sign in to Flow State" } },
+        signUp: { start: { title: "Create your account", subtitle: "Start tracking gym leads today" } },
+      }}
+      routerPush={(to) => setLocation(stripBase(to))}
+      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+    >
+      <QueryClientProvider client={queryClient}>
+        <ClerkQueryClientCacheInvalidator />
+        <Switch>
+          <Route path="/" component={HomeRedirect} />
+          {/* REQUIRED — /*? matches both bare URL and Clerk OAuth sub-paths */}
+          <Route path="/sign-in/*?" component={SignInPage} />
+          <Route path="/sign-up/*?" component={SignUpPage} />
+          <Route path="/accept-invite" component={AcceptInvitePage} />
+          {/* App routes — only reachable if HomeRedirect already passed gym check */}
+          <Route path="/leads" component={() => <AuthedAppGuard><LeadsList /></AuthedAppGuard>} />
+          <Route path="/leads/new" component={() => <AuthedAppGuard><LeadNew /></AuthedAppGuard>} />
+          <Route path="/leads/:id" component={() => <AuthedAppGuard><LeadDetail /></AuthedAppGuard>} />
+          <Route path="/sequences" component={() => <AuthedAppGuard><Sequences /></AuthedAppGuard>} />
+          <Route path="/analytics" component={() => <AuthedAppGuard><Analytics /></AuthedAppGuard>} />
+          <Route path="/team" component={() => <AuthedAppGuard><Team /></AuthedAppGuard>} />
+          <Route component={NotFound} />
+        </Switch>
+      </QueryClientProvider>
+    </ClerkProvider>
+  );
+}
+
+// Guard used by deep links: checks sign-in AND gym assignment.
+// Users without a gym are redirected to / where GymSetupPage is shown.
+function AuthedAppGuard({ children }: { children: React.ReactNode }) {
+  const { isLoaded, isSignedIn } = useAuth();
+  const [, setLocation] = useLocation();
+  const [gymId, setGymId] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (!isSignedIn) { setLocation("/sign-in"); return; }
+    fetch("/api/me", { credentials: "include" })
+      .then((r) => r.json())
+      .then((d: { user?: { gymId: string | null } }) => setGymId(d.user?.gymId ?? null))
+      .catch(() => setGymId(null));
+  }, [isLoaded, isSignedIn, setLocation]);
+
+  useEffect(() => {
+    if (gymId === null) setLocation("/"); // redirect to gym setup
+  }, [gymId, setLocation]);
+
+  if (!isLoaded || !isSignedIn || gymId === undefined || gymId === null) return null;
+  return (
+    <Layout>
+      {children}
+    </Layout>
   );
 }
 
 function App() {
   useKeepAlive();
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <AuthProvider>
-            <LoginGate />
-          </AuthProvider>
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <TooltipProvider>
+      <WouterRouter base={basePath}>
+        <ClerkProviderWithRoutes />
+      </WouterRouter>
+      <Toaster />
+    </TooltipProvider>
   );
 }
 

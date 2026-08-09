@@ -21,7 +21,7 @@ import {
 } from "@workspace/api-client-react";
 import type { ActionItem } from "@workspace/api-client-react";
 
-import { useAuth } from "@/context/AuthContext";
+import { useUser } from "@clerk/expo";
 import { useColors } from "@/hooks/useColors";
 
 function MetricCard({
@@ -101,7 +101,7 @@ function QueueItemRow({ item }: { item: ActionItem }) {
 export default function DashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user } = useUser();
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -111,7 +111,7 @@ export default function DashboardScreen() {
 
   const isLoading = pulseLoading || summaryLoading || queueLoading;
 
-  const firstName = user?.firstName ?? user?.email?.split("@")[0] ?? "there";
+  const firstName = user?.firstName ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "there";
 
   function handleRefresh() {
     refetchPulse();
@@ -214,114 +214,28 @@ export default function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  greeting: {
-    fontSize: 14,
-  },
-  name: {
-    fontSize: 28,
-    letterSpacing: -0.5,
-  },
-  avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sectionLabel: {
-    fontSize: 11,
-    letterSpacing: 1,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 8,
-  },
-  sectionCount: {
-    fontSize: 12,
-  },
-  metricsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  metricCard: {
-    flex: 1,
-    minWidth: "45%",
-    padding: 14,
-    borderWidth: 1,
-    gap: 6,
-  },
-  metricIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  metricValue: {
-    fontSize: 24,
-    letterSpacing: -0.5,
-  },
-  metricLabel: {
-    fontSize: 12,
-  },
-  queueList: {
-    gap: 8,
-  },
-  queueRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    gap: 12,
-    borderWidth: 1,
-  },
-  scoreChip: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  scoreText: {
-    fontSize: 15,
-  },
-  queueInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  queueName: {
-    fontSize: 15,
-  },
-  queueReason: {
-    fontSize: 12,
-  },
-  loadingRow: {
-    paddingVertical: 20,
-    alignItems: "center",
-  },
-  emptyBox: {
-    padding: 24,
-    alignItems: "center",
-    gap: 8,
-    borderWidth: 1,
-  },
-  emptyText: {
-    fontSize: 14,
-  },
+  root: { flex: 1 },
+  content: { paddingHorizontal: 16, gap: 12 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+  greeting: { fontSize: 14 },
+  name: { fontSize: 28, letterSpacing: -0.5 },
+  avatar: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  sectionLabel: { fontSize: 11, letterSpacing: 1 },
+  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 },
+  sectionCount: { fontSize: 12 },
+  metricsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  metricCard: { flex: 1, minWidth: "45%", padding: 14, borderWidth: 1, gap: 6 },
+  metricIcon: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  metricValue: { fontSize: 24, letterSpacing: -0.5 },
+  metricLabel: { fontSize: 12 },
+  queueList: { gap: 8 },
+  queueRow: { flexDirection: "row", alignItems: "center", padding: 12, gap: 12, borderWidth: 1 },
+  scoreChip: { width: 44, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  scoreText: { fontSize: 15 },
+  queueInfo: { flex: 1, gap: 2 },
+  queueName: { fontSize: 15 },
+  queueReason: { fontSize: 12 },
+  loadingRow: { paddingVertical: 20, alignItems: "center" },
+  emptyBox: { padding: 24, alignItems: "center", gap: 8, borderWidth: 1 },
+  emptyText: { fontSize: 14 },
 });

@@ -29,21 +29,17 @@ import type {
   AnthropicError,
   AnthropicMessage,
   AnthropicMessageInput,
-  AuthForgotPasswordInput,
-  AuthLoginInput,
-  AuthLoginResult,
-  AuthRegisterInput,
-  AuthResetPasswordInput,
-  AuthSuccessMessage,
-  AuthUserEnvelope,
-  AuthVerifyEmailParams,
   ConversionTrend,
+  CreateGym201,
+  CreateGymBody,
   CreateLeadEventInput,
   CreateLeadInput,
   DashboardSummary,
   DraftMessageInput,
   ErrorEnvelope,
   ErrorResponse,
+  GetCurrentUser200,
+  GetInviteDetails200,
   HealthStatus,
   Lead,
   LeadEvent,
@@ -51,7 +47,6 @@ import type {
   LeadSequence,
   LeadWithEvents,
   ListLeadsParams,
-  LogoutSuccess,
   MessageDraft,
   OutboundMessage,
   PipelineFunnel,
@@ -2394,20 +2389,20 @@ export const useUpdateSequenceTemplate = <TError = ErrorType<ErrorResponse>,
       return useMutation(getUpdateSequenceTemplateMutationOptions(options));
     }
 
-export const getGetCurrentAuthUserUrl = () => {
+export const getGetCurrentUserUrl = () => {
 
 
 
 
-  return `/api/auth/user`
+  return `/api/me`
 }
 
 /**
- * @summary Get the currently authenticated user
+ * @summary Get the current authenticated user from the local database
  */
-export const getCurrentAuthUser = async ( options?: RequestInit): Promise<AuthUserEnvelope> => {
+export const getCurrentUser = async ( options?: RequestInit): Promise<GetCurrentUser200> => {
 
-  return customFetch<AuthUserEnvelope>(getGetCurrentAuthUserUrl(),
+  return customFetch<GetCurrentUser200>(getGetCurrentUserUrl(),
   {
     ...options,
     method: 'GET'
@@ -2420,45 +2415,45 @@ export const getCurrentAuthUser = async ( options?: RequestInit): Promise<AuthUs
 
 
 
-export const getGetCurrentAuthUserQueryKey = () => {
+export const getGetCurrentUserQueryKey = () => {
     return [
-    `/api/auth/user`
+    `/api/me`
     ] as const;
     }
 
 
-export const getGetCurrentAuthUserQueryOptions = <TData = Awaited<ReturnType<typeof getCurrentAuthUser>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCurrentAuthUser>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetCurrentUserQueryOptions = <TData = Awaited<ReturnType<typeof getCurrentUser>>, TError = ErrorType<ErrorEnvelope>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCurrentUser>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetCurrentAuthUserQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetCurrentUserQueryKey();
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCurrentAuthUser>>> = ({ signal }) => getCurrentAuthUser({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCurrentUser>>> = ({ signal }) => getCurrentUser({ signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCurrentAuthUser>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCurrentUser>>, TError, TData> & { queryKey: QueryKey }
 }
 
-export type GetCurrentAuthUserQueryResult = NonNullable<Awaited<ReturnType<typeof getCurrentAuthUser>>>
-export type GetCurrentAuthUserQueryError = ErrorType<unknown>
+export type GetCurrentUserQueryResult = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>
+export type GetCurrentUserQueryError = ErrorType<ErrorEnvelope>
 
 
 /**
- * @summary Get the currently authenticated user
+ * @summary Get the current authenticated user from the local database
  */
 
-export function useGetCurrentAuthUser<TData = Awaited<ReturnType<typeof getCurrentAuthUser>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCurrentAuthUser>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export function useGetCurrentUser<TData = Awaited<ReturnType<typeof getCurrentUser>>, TError = ErrorType<ErrorEnvelope>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCurrentUser>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetCurrentAuthUserQueryOptions(options)
+  const queryOptions = getGetCurrentUserQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -2471,36 +2466,36 @@ export function useGetCurrentAuthUser<TData = Awaited<ReturnType<typeof getCurre
 
 
 
-export const getAuthRegisterUrl = () => {
+export const getCreateGymUrl = () => {
 
 
 
 
-  return `/api/auth/register`
+  return `/api/gyms`
 }
 
 /**
- * @summary Create a new account with email and password
+ * @summary Create a gym for the authenticated user (owner onboarding)
  */
-export const authRegister = async (authRegisterInput: AuthRegisterInput, options?: RequestInit): Promise<AuthSuccessMessage> => {
+export const createGym = async (createGymBody: CreateGymBody, options?: RequestInit): Promise<CreateGym201> => {
 
-  return customFetch<AuthSuccessMessage>(getAuthRegisterUrl(),
+  return customFetch<CreateGym201>(getCreateGymUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(authRegisterInput)
+    body: JSON.stringify(createGymBody)
   }
 );}
 
 
 
 
-export const getAuthRegisterMutationOptions = <TError = ErrorType<ErrorEnvelope>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authRegister>>, TError,{data: BodyType<AuthRegisterInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof authRegister>>, TError,{data: BodyType<AuthRegisterInput>}, TContext> => {
+export const getCreateGymMutationOptions = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGym>>, TError,{data: BodyType<CreateGymBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createGym>>, TError,{data: BodyType<CreateGymBody>}, TContext> => {
 
-const mutationKey = ['authRegister'];
+const mutationKey = ['createGym'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -2510,10 +2505,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof authRegister>>, {data: BodyType<AuthRegisterInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createGym>>, {data: BodyType<CreateGymBody>}> = (props) => {
           const {data} = props ?? {};
 
-          return  authRegister(data,requestOptions)
+          return  createGym(data,requestOptions)
         }
 
 
@@ -2523,115 +2518,38 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type AuthRegisterMutationResult = NonNullable<Awaited<ReturnType<typeof authRegister>>>
-    export type AuthRegisterMutationBody = BodyType<AuthRegisterInput>
-    export type AuthRegisterMutationError = ErrorType<ErrorEnvelope>
+    export type CreateGymMutationResult = NonNullable<Awaited<ReturnType<typeof createGym>>>
+    export type CreateGymMutationBody = BodyType<CreateGymBody>
+    export type CreateGymMutationError = ErrorType<ErrorEnvelope>
 
     /**
- * @summary Create a new account with email and password
+ * @summary Create a gym for the authenticated user (owner onboarding)
  */
-export const useAuthRegister = <TError = ErrorType<ErrorEnvelope>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authRegister>>, TError,{data: BodyType<AuthRegisterInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useCreateGym = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGym>>, TError,{data: BodyType<CreateGymBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof authRegister>>,
+        Awaited<ReturnType<typeof createGym>>,
         TError,
-        {data: BodyType<AuthRegisterInput>},
+        {data: BodyType<CreateGymBody>},
         TContext
       > => {
-      return useMutation(getAuthRegisterMutationOptions(options));
+      return useMutation(getCreateGymMutationOptions(options));
     }
 
-export const getAuthLoginUrl = () => {
+export const getGetInviteDetailsUrl = (token: string,) => {
 
 
 
 
-  return `/api/auth/login`
+  return `/api/auth/invite/${token}`
 }
 
 /**
- * @summary Sign in with email and password
+ * @summary Validate an invite token and return gym + email info
  */
-export const authLogin = async (authLoginInput: AuthLoginInput, options?: RequestInit): Promise<AuthLoginResult> => {
+export const getInviteDetails = async (token: string, options?: RequestInit): Promise<GetInviteDetails200> => {
 
-  return customFetch<AuthLoginResult>(getAuthLoginUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(authLoginInput)
-  }
-);}
-
-
-
-
-export const getAuthLoginMutationOptions = <TError = ErrorType<ErrorEnvelope>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authLogin>>, TError,{data: BodyType<AuthLoginInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof authLogin>>, TError,{data: BodyType<AuthLoginInput>}, TContext> => {
-
-const mutationKey = ['authLogin'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof authLogin>>, {data: BodyType<AuthLoginInput>}> = (props) => {
-          const {data} = props ?? {};
-
-          return  authLogin(data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type AuthLoginMutationResult = NonNullable<Awaited<ReturnType<typeof authLogin>>>
-    export type AuthLoginMutationBody = BodyType<AuthLoginInput>
-    export type AuthLoginMutationError = ErrorType<ErrorEnvelope>
-
-    /**
- * @summary Sign in with email and password
- */
-export const useAuthLogin = <TError = ErrorType<ErrorEnvelope>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authLogin>>, TError,{data: BodyType<AuthLoginInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof authLogin>>,
-        TError,
-        {data: BodyType<AuthLoginInput>},
-        TContext
-      > => {
-      return useMutation(getAuthLoginMutationOptions(options));
-    }
-
-export const getAuthVerifyEmailUrl = (params: AuthVerifyEmailParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/api/auth/verify-email?${stringifiedParams}` : `/api/auth/verify-email`
-}
-
-/**
- * @summary Verify email address via token link
- */
-export const authVerifyEmail = async (params: AuthVerifyEmailParams, options?: RequestInit): Promise<unknown> => {
-
-  return customFetch<unknown>(getAuthVerifyEmailUrl(params),
+  return customFetch<GetInviteDetails200>(getGetInviteDetailsUrl(token),
   {
     ...options,
     method: 'GET'
@@ -2644,262 +2562,45 @@ export const authVerifyEmail = async (params: AuthVerifyEmailParams, options?: R
 
 
 
-export const getAuthVerifyEmailQueryKey = (params?: AuthVerifyEmailParams,) => {
+export const getGetInviteDetailsQueryKey = (token: string,) => {
     return [
-    `/api/auth/verify-email`, ...(params ? [params] : [])
+    `/api/auth/invite/${token}`
     ] as const;
     }
 
 
-export const getAuthVerifyEmailQueryOptions = <TData = Awaited<ReturnType<typeof authVerifyEmail>>, TError = ErrorType<void>>(params: AuthVerifyEmailParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof authVerifyEmail>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetInviteDetailsQueryOptions = <TData = Awaited<ReturnType<typeof getInviteDetails>>, TError = ErrorType<ErrorEnvelope>>(token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getInviteDetails>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getAuthVerifyEmailQueryKey(params);
+  const queryKey =  queryOptions?.queryKey ?? getGetInviteDetailsQueryKey(token);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof authVerifyEmail>>> = ({ signal }) => authVerifyEmail(params, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getInviteDetails>>> = ({ signal }) => getInviteDetails(token, { signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof authVerifyEmail>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, enabled: token !== null && token !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getInviteDetails>>, TError, TData> & { queryKey: QueryKey }
 }
 
-export type AuthVerifyEmailQueryResult = NonNullable<Awaited<ReturnType<typeof authVerifyEmail>>>
-export type AuthVerifyEmailQueryError = ErrorType<void>
+export type GetInviteDetailsQueryResult = NonNullable<Awaited<ReturnType<typeof getInviteDetails>>>
+export type GetInviteDetailsQueryError = ErrorType<ErrorEnvelope>
 
 
 /**
- * @summary Verify email address via token link
+ * @summary Validate an invite token and return gym + email info
  */
 
-export function useAuthVerifyEmail<TData = Awaited<ReturnType<typeof authVerifyEmail>>, TError = ErrorType<void>>(
- params: AuthVerifyEmailParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof authVerifyEmail>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export function useGetInviteDetails<TData = Awaited<ReturnType<typeof getInviteDetails>>, TError = ErrorType<ErrorEnvelope>>(
+ token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getInviteDetails>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getAuthVerifyEmailQueryOptions(params,options)
-
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-
-export const getAuthForgotPasswordUrl = () => {
-
-
-
-
-  return `/api/auth/forgot-password`
-}
-
-/**
- * @summary Request a password reset email
- */
-export const authForgotPassword = async (authForgotPasswordInput: AuthForgotPasswordInput, options?: RequestInit): Promise<AuthSuccessMessage> => {
-
-  return customFetch<AuthSuccessMessage>(getAuthForgotPasswordUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(authForgotPasswordInput)
-  }
-);}
-
-
-
-
-export const getAuthForgotPasswordMutationOptions = <TError = ErrorType<ErrorEnvelope>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authForgotPassword>>, TError,{data: BodyType<AuthForgotPasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof authForgotPassword>>, TError,{data: BodyType<AuthForgotPasswordInput>}, TContext> => {
-
-const mutationKey = ['authForgotPassword'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof authForgotPassword>>, {data: BodyType<AuthForgotPasswordInput>}> = (props) => {
-          const {data} = props ?? {};
-
-          return  authForgotPassword(data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type AuthForgotPasswordMutationResult = NonNullable<Awaited<ReturnType<typeof authForgotPassword>>>
-    export type AuthForgotPasswordMutationBody = BodyType<AuthForgotPasswordInput>
-    export type AuthForgotPasswordMutationError = ErrorType<ErrorEnvelope>
-
-    /**
- * @summary Request a password reset email
- */
-export const useAuthForgotPassword = <TError = ErrorType<ErrorEnvelope>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authForgotPassword>>, TError,{data: BodyType<AuthForgotPasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof authForgotPassword>>,
-        TError,
-        {data: BodyType<AuthForgotPasswordInput>},
-        TContext
-      > => {
-      return useMutation(getAuthForgotPasswordMutationOptions(options));
-    }
-
-export const getAuthResetPasswordUrl = () => {
-
-
-
-
-  return `/api/auth/reset-password`
-}
-
-/**
- * @summary Set a new password using a reset token
- */
-export const authResetPassword = async (authResetPasswordInput: AuthResetPasswordInput, options?: RequestInit): Promise<AuthSuccessMessage> => {
-
-  return customFetch<AuthSuccessMessage>(getAuthResetPasswordUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(authResetPasswordInput)
-  }
-);}
-
-
-
-
-export const getAuthResetPasswordMutationOptions = <TError = ErrorType<ErrorEnvelope>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authResetPassword>>, TError,{data: BodyType<AuthResetPasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof authResetPassword>>, TError,{data: BodyType<AuthResetPasswordInput>}, TContext> => {
-
-const mutationKey = ['authResetPassword'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof authResetPassword>>, {data: BodyType<AuthResetPasswordInput>}> = (props) => {
-          const {data} = props ?? {};
-
-          return  authResetPassword(data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type AuthResetPasswordMutationResult = NonNullable<Awaited<ReturnType<typeof authResetPassword>>>
-    export type AuthResetPasswordMutationBody = BodyType<AuthResetPasswordInput>
-    export type AuthResetPasswordMutationError = ErrorType<ErrorEnvelope>
-
-    /**
- * @summary Set a new password using a reset token
- */
-export const useAuthResetPassword = <TError = ErrorType<ErrorEnvelope>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authResetPassword>>, TError,{data: BodyType<AuthResetPasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof authResetPassword>>,
-        TError,
-        {data: BodyType<AuthResetPasswordInput>},
-        TContext
-      > => {
-      return useMutation(getAuthResetPasswordMutationOptions(options));
-    }
-
-export const getLogoutSessionUrl = () => {
-
-
-
-
-  return `/api/logout`
-}
-
-/**
- * @summary Clear the current session
- */
-export const logoutSession = async ( options?: RequestInit): Promise<LogoutSuccess> => {
-
-  return customFetch<LogoutSuccess>(getLogoutSessionUrl(),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-
-
-export const getLogoutSessionQueryKey = () => {
-    return [
-    `/api/logout`
-    ] as const;
-    }
-
-
-export const getLogoutSessionQueryOptions = <TData = Awaited<ReturnType<typeof logoutSession>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof logoutSession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getLogoutSessionQueryKey();
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof logoutSession>>> = ({ signal }) => logoutSession({ signal, ...requestOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof logoutSession>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type LogoutSessionQueryResult = NonNullable<Awaited<ReturnType<typeof logoutSession>>>
-export type LogoutSessionQueryError = ErrorType<unknown>
-
-
-/**
- * @summary Clear the current session
- */
-
-export function useLogoutSession<TData = Awaited<ReturnType<typeof logoutSession>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof logoutSession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getLogoutSessionQueryOptions(options)
+  const queryOptions = getGetInviteDetailsQueryOptions(token,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

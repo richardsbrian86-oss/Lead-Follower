@@ -331,66 +331,34 @@ export interface AuthUser {
   profileImageUrl: string | null;
 }
 
-export interface AuthUserEnvelope {
-  user: AuthUser | null;
-}
-
-export interface AuthRegisterInput {
-  email: string;
-  /** @minLength 8 */
-  password: string;
-  /** @minLength 1 */
-  name: string;
-}
-
-export interface AuthLoginInput {
-  email: string;
-  password: string;
-}
-
-export interface AuthLoginResult {
-  user: AuthUser;
-  /** Session token (SID) — store in SecureStore for mobile Bearer auth */
-  token: string;
-}
-
-export interface AuthForgotPasswordInput {
-  email: string;
-}
-
-export interface AuthResetPasswordInput {
-  token: string;
-  /** @minLength 8 */
-  password: string;
-}
-
-export interface AuthSuccessMessage {
-  message: string;
-}
-
-export const LogoutSuccessValue = {
-  success: true,
-} as const;
-export type LogoutSuccess = typeof LogoutSuccessValue;
-
 export interface ErrorEnvelope {
   error: string;
 }
-
-/**
- * Opaque session token — `Bearer <sid>`.
- */
-export type AuthorizationSessionHeaderParameter = string;
 
 export type ListLeadsParams = {
 status?: LeadStatus;
 search?: string;
 };
 
-export type AuthVerifyEmailParams = {
-/**
- * Verification token sent to the user's email.
- */
-token: string;
+export type GetCurrentUser200 = {
+  user?: AuthUser;
+};
+
+export type CreateGymBody = {
+  gymName: string;
+};
+
+export type CreateGym201Gym = {
+  id?: string;
+  name?: string;
+};
+
+export type CreateGym201 = {
+  gym?: CreateGym201Gym;
+};
+
+export type GetInviteDetails200 = {
+  email: string;
+  gymName: string;
 };
 

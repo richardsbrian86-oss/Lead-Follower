@@ -1,20 +1,23 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import helmet from "helmet";
-import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import rateLimit from "express-rate-limit";
+import { clerkMiddleware } from "@clerk/express";
+import { publishableKeyFromHost } from "@clerk/shared/keys";
+import {
+  CLERK_PROXY_PATH,
+  clerkProxyMiddleware,
+  getClerkProxyHost,
+} from "./middlewares/clerkProxyMiddleware";
 import router from "./routes";
 import { logger } from "./lib/logger";
-import { authMiddleware } from "./middlewares/authMiddleware";
 import { startScheduler } from "./lib/scheduler";
 import { seedSequenceTemplates } from "./lib/seed-templates";
 
 const app: Express = express();
 
 // Trust the first hop proxy so req.ip resolves to the real client IP.
-// express-rate-limit reads req.ip; without this all traffic appears to come
-// from the same proxy address and limits become effectively global.
 app.set("trust proxy", 1);
 
 // Security headers first
@@ -40,16 +43,14 @@ app.use(
   }),
 );
 
+// Clerk proxy must be mounted before body parsers (it streams raw bytes)
+app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
+
 app.use(cors({ credentials: true, origin: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
 
 // Paths (relative to /api) that are exempt from the general rate limiter.
-// Auth endpoints have their own dedicated limiter (authLimiter below) and must
-// not share the general budget — if other test suites consume that budget,
-// auth routes would start returning 429, breaking auth e2e tests.
-// The health probe is a liveness check and must always be reachable.
 function isExemptFromGeneralLimit(req: Request): boolean {
   return req.path.startsWith("/auth/") || req.path === "/logout" || req.path === "/healthz";
 }
@@ -66,9 +67,7 @@ const generalLimiter = rateLimit({
   },
 });
 
-// Auth limiter — protects sensitive credential endpoints from brute-force and
-// credential-stuffing attacks.  100 req / 15 min per IP allows automated e2e
-// test suites to run while still blocking realistic brute-force abuse.
+// Auth limiter — protects invite/onboarding endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -79,8 +78,6 @@ const authLimiter = rateLimit({
   },
 });
 
-// Draft limiter — permissive, no external cost (just AI text generation)
-// 50 drafts per 15 min is generous for any real user workflow
 const draftLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 50,
@@ -91,7 +88,6 @@ const draftLimiter = rateLimit({
   },
 });
 
-// Send/action limiter — strict because these fire real emails/SMS (external cost)
 const sendLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
@@ -102,7 +98,6 @@ const sendLimiter = rateLimit({
   },
 });
 
-// AI chat limiter — moderate; each message costs API credits
 const chatLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
@@ -114,22 +109,22 @@ const chatLimiter = rateLimit({
 });
 
 app.use("/api", generalLimiter);
-// Auth endpoints have their own dedicated limiter (excluded from generalLimiter above)
-app.use([
-  "/api/auth/login",
-  "/api/auth/register",
-  "/api/auth/forgot-password",
-  "/api/auth/reset-password",
-  "/api/auth/accept-invite",
-  "/api/auth/resend-verification",
-], authLimiter);
+app.use(["/api/auth/accept-invite", "/api/auth/resend-verification", "/api/gyms"], authLimiter);
 app.use("/api/leads/:id/messages/draft", draftLimiter);
 app.use("/api/leads/:id/messages/send", sendLimiter);
 app.use("/api/analytics/insights", sendLimiter);
 app.use("/api/anthropic/conversations/:id/messages", chatLimiter);
 
-// Populate req.user from session cookie / bearer token
-app.use(authMiddleware as (req: Request, res: Response, next: NextFunction) => void);
+// Clerk middleware — resolves session from cookie, validates JWT.
+// Must come after the proxy middleware but before route handlers.
+app.use(
+  clerkMiddleware((req) => ({
+    publishableKey: publishableKeyFromHost(
+      getClerkProxyHost(req) ?? "",
+      process.env.CLERK_PUBLISHABLE_KEY,
+    ),
+  })),
+);
 
 app.use("/api", router);
 

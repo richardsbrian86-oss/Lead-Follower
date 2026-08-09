@@ -663,40 +663,63 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /auth/user:
+
+  /me:
     get:
       tags: [Auth]
-      operationId: getCurrentAuthUser
-      summary: Get the currently authenticated user
-      parameters:
-        - $ref: '#/components/parameters/AuthorizationSessionHeader'
-        - $ref: '#/components/parameters/SessionCookie'
+      operationId: getCurrentUser
+      summary: Get the current authenticated user from the local database
+      security:
+        - ClerkAuth: []
       responses:
         '200':
-          description: Auth status resolved successfully.
+          description: Current user record.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthUserEnvelope'
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/AuthUser'
+        '401':
+          description: Not authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
 
-  /auth/register:
+  /gyms:
     post:
       tags: [Auth]
-      operationId: authRegister
-      summary: Create a new account with email and password
+      operationId: createGym
+      summary: Create a gym for the authenticated user (owner onboarding)
+      security:
+        - ClerkAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AuthRegisterInput'
+              type: object
+              required: [gymName]
+              properties:
+                gymName:
+                  type: string
       responses:
         '201':
-          description: Account created. Verification email sent.
+          description: Gym created.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthSuccessMessage'
+                type: object
+                properties:
+                  gym:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
         '400':
           description: Validation error.
           content:
@@ -704,147 +727,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '409':
-          description: Email already in use.
+          description: Already belongs to a gym.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
 
-  /auth/login:
-    post:
-      tags: [Auth]
-      operationId: authLogin
-      summary: Sign in with email and password
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AuthLoginInput'
-      responses:
-        '200':
-          description: Authenticated. Session cookie set.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthLoginResult'
-        '400':
-          description: Missing fields.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '401':
-          description: Invalid credentials.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '403':
-          description: Email not yet verified.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-
-  /auth/verify-email:
+  /auth/invite/{token}:
     get:
       tags: [Auth]
-      operationId: authVerifyEmail
-      summary: Verify email address via token link
+      operationId: getInviteDetails
+      summary: Validate an invite token and return gym + email info
       parameters:
         - name: token
-          in: query
+          in: path
           required: true
-          description: Verification token sent to the user's email.
           schema:
             type: string
       responses:
-        '302':
-          description: Redirects to the app after verification (success or failure).
-
-  /auth/forgot-password:
-    post:
-      tags: [Auth]
-      operationId: authForgotPassword
-      summary: Request a password reset email
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AuthForgotPasswordInput'
-      responses:
         '200':
-          description: Reset email sent (if account exists).
+          description: Invite is valid.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthSuccessMessage'
-        '400':
-          description: Invalid email.
+                type: object
+                required: [email, gymName]
+                properties:
+                  email:
+                    type: string
+                  gymName:
+                    type: string
+        '404':
+          description: Invite not found or expired.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-
-  /auth/reset-password:
-    post:
-      tags: [Auth]
-      operationId: authResetPassword
-      summary: Set a new password using a reset token
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AuthResetPasswordInput'
-      responses:
-        '200':
-          description: Password updated successfully.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthSuccessMessage'
-        '400':
-          description: Invalid or expired token.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-
-  /logout:
-    get:
-      tags: [Auth]
-      operationId: logoutSession
-      summary: Clear the current session
-      parameters:
-        - $ref: '#/components/parameters/AuthorizationSessionHeader'
-        - $ref: '#/components/parameters/SessionCookie'
-      responses:
-        '200':
-          description: Session cleared.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LogoutSuccess'
 
 components:
-  parameters:
-    AuthorizationSessionHeader:
-      name: Authorization
-      in: header
-      required: false
-      description: Opaque session token — `Bearer <sid>`.
-      schema:
-        type: string
-    SessionCookie:
-      name: sid
-      in: cookie
-      required: false
-      description: Browser session cookie.
-      schema:
-        type: string
+  securitySchemes:
+    ClerkAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Clerk session JWT. The browser sends this as a cookie managed by the Clerk SDK; mobile clients send it in the Authorization header as `Bearer <token>`.
   schemas:
     HealthStatus:
       type: object
@@ -1484,74 +1410,6 @@ components:
           type: [string, 'null']
         profileImageUrl:
           type: [string, 'null']
-    AuthUserEnvelope:
-      type: object
-      required: [user]
-      properties:
-        user:
-          oneOf:
-            - $ref: '#/components/schemas/AuthUser'
-            - type: 'null'
-    AuthRegisterInput:
-      type: object
-      required: [email, password, name]
-      properties:
-        email:
-          type: string
-          format: email
-        password:
-          type: string
-          minLength: 8
-        name:
-          type: string
-          minLength: 1
-    AuthLoginInput:
-      type: object
-      required: [email, password]
-      properties:
-        email:
-          type: string
-          format: email
-        password:
-          type: string
-    AuthLoginResult:
-      type: object
-      required: [user, token]
-      properties:
-        user:
-          $ref: '#/components/schemas/AuthUser'
-        token:
-          type: string
-          description: Session token (SID) — store in SecureStore for mobile Bearer auth
-    AuthForgotPasswordInput:
-      type: object
-      required: [email]
-      properties:
-        email:
-          type: string
-          format: email
-    AuthResetPasswordInput:
-      type: object
-      required: [token, password]
-      properties:
-        token:
-          type: string
-        password:
-          type: string
-          minLength: 8
-    AuthSuccessMessage:
-      type: object
-      required: [message]
-      properties:
-        message:
-          type: string
-    LogoutSuccess:
-      type: object
-      required: [success]
-      properties:
-        success:
-          type: boolean
-          const: true
     ErrorEnvelope:
       type: object
       required: [error]

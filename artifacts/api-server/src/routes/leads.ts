@@ -53,7 +53,7 @@ router.get("/leads", async (req, res): Promise<void> => {
   }
 
   const { status, search } = query.data;
-  const gymId = req.user!.gymId!;
+  const gymId = req.dbUser!.gymId!;
 
   const conditions = [eq(leadsTable.gymId, gymId)];
   if (status) {
@@ -84,7 +84,7 @@ router.post("/leads", async (req, res): Promise<void> => {
     return;
   }
 
-  const gymId = req.user!.gymId!;
+  const gymId = req.dbUser!.gymId!;
   const { visitDate, ...rest } = parsed.data;
   const [lead] = await db
     .insert(leadsTable)
@@ -115,7 +115,7 @@ router.get("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const gymId = req.user!.gymId!;
+  const gymId = req.dbUser!.gymId!;
   const [lead] = await db
     .select()
     .from(leadsTable)
@@ -148,7 +148,7 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const gymId = req.user!.gymId!;
+  const gymId = req.dbUser!.gymId!;
   const [existing] = await db
     .select()
     .from(leadsTable)
@@ -213,7 +213,7 @@ router.delete("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const gymId = req.user!.gymId!;
+  const gymId = req.dbUser!.gymId!;
   const [lead] = await db
     .delete(leadsTable)
     .where(and(eq(leadsTable.id, params.data.id), eq(leadsTable.gymId, gymId)))
@@ -240,7 +240,7 @@ router.post("/leads/:id/events", async (req, res): Promise<void> => {
     return;
   }
 
-  const gymId = req.user!.gymId!;
+  const gymId = req.dbUser!.gymId!;
   const [lead] = await db
     .select()
     .from(leadsTable)
@@ -270,7 +270,7 @@ router.get("/leads/:id/score", async (req, res): Promise<void> => {
     return;
   }
 
-  const gymId = req.user!.gymId!;
+  const gymId = req.dbUser!.gymId!;
   const [lead] = await db.select().from(leadsTable).where(
     and(eq(leadsTable.id, params.data.id), eq(leadsTable.gymId, gymId))
   );
@@ -284,7 +284,7 @@ router.get("/leads/:id/score", async (req, res): Promise<void> => {
 });
 
 router.get("/dashboard/summary", async (req, res): Promise<void> => {
-  const gymId = req.user!.gymId!;
+  const gymId = req.dbUser!.gymId!;
 
   const statusCounts = await db
     .select({
@@ -357,7 +357,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
 });
 
 router.get("/dashboard/action-queue", async (req, res): Promise<void> => {
-  const gymId = req.user!.gymId!;
+  const gymId = req.dbUser!.gymId!;
   const now = new Date();
   const followUpThreshold = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
   const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);

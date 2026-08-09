@@ -53,7 +53,7 @@ router.get("/leads/:id/sequence", async (req, res): Promise<void> => {
     return;
   }
 
-  const gymId = req.user!.gymId!;
+  const gymId = req.dbUser!.gymId!;
   if (!(await requireLeadOwnership(params.data.id, gymId))) {
     res.status(404).json({ error: "Lead not found" });
     return;
@@ -79,7 +79,7 @@ router.post("/leads/:id/sequence/pause", async (req, res): Promise<void> => {
     return;
   }
 
-  const gymId = req.user!.gymId!;
+  const gymId = req.dbUser!.gymId!;
   if (!(await requireLeadOwnership(params.data.id, gymId))) {
     res.status(404).json({ error: "Lead not found" });
     return;
@@ -111,7 +111,7 @@ router.post("/leads/:id/sequence/resume", async (req, res): Promise<void> => {
     return;
   }
 
-  const gymId = req.user!.gymId!;
+  const gymId = req.dbUser!.gymId!;
   if (!(await requireLeadOwnership(params.data.id, gymId))) {
     res.status(404).json({ error: "Lead not found" });
     return;
@@ -143,7 +143,7 @@ router.post("/leads/:id/sequence/cancel", async (req, res): Promise<void> => {
     return;
   }
 
-  const gymId = req.user!.gymId!;
+  const gymId = req.dbUser!.gymId!;
   if (!(await requireLeadOwnership(params.data.id, gymId))) {
     res.status(404).json({ error: "Lead not found" });
     return;
@@ -170,7 +170,7 @@ router.post("/leads/:id/sequence/cancel", async (req, res): Promise<void> => {
 
 // Templates are scoped per gym — each gym has its own customizable sequence templates.
 router.get("/sequences/templates", async (req, res): Promise<void> => {
-  const gymId = req.user!.gymId!;
+  const gymId = req.dbUser!.gymId!;
   const templates = await db
     .select()
     .from(sequenceTemplatesTable)
@@ -192,7 +192,7 @@ router.put("/sequences/templates/:step", async (req, res): Promise<void> => {
     return;
   }
 
-  const gymId = req.user!.gymId!;
+  const gymId = req.dbUser!.gymId!;
   const [existing] = await db
     .select()
     .from(sequenceTemplatesTable)

@@ -1,15 +1,18 @@
+import crypto from "crypto";
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { db, invitesTable, usersTable, gymsTable, sessionsTable } from "@workspace/db";
-import { eq, and, isNull, gt, sql } from "drizzle-orm";
-import { generateToken } from "../lib/auth";
+import { db, invitesTable, usersTable, gymsTable } from "@workspace/db";
+import { eq, and, isNull, gt } from "drizzle-orm";
 import { sendInviteEmail } from "../lib/email";
 
 const INVITE_TTL_MS = 48 * 60 * 60 * 1000;
 
+function generateToken(): string {
+  return crypto.randomBytes(32).toString("hex");
+}
 const router: IRouter = Router();
 
 function requireOwner(req: Request, res: Response, next: NextFunction) {
-  if (req.user?.role !== "owner") {
+  if (req.dbUser?.role !== "owner") {
     res.status(403).json({ error: "Only gym owners can perform this action." });
     return;
   }
@@ -28,7 +31,7 @@ router.get(
   "/invites/members",
   requireOwner as (req: Request, res: Response, next: NextFunction) => void,
   async (req: Request, res: Response) => {
-    const gymId = req.user!.gymId!;
+    const gymId = req.dbUser!.gymId!;
     const members = await db
       .select({
         id: usersTable.id,
@@ -49,7 +52,7 @@ router.get(
   "/invites",
   requireOwner as (req: Request, res: Response, next: NextFunction) => void,
   async (req: Request, res: Response) => {
-    const gymId = req.user!.gymId!;
+    const gymId = req.dbUser!.gymId!;
     const now = new Date();
 
     const allInvites = await db
@@ -88,7 +91,7 @@ router.post(
       return;
     }
 
-    const gymId = req.user!.gymId!;
+    const gymId = req.dbUser!.gymId!;
     const normalizedEmail = email.toLowerCase().trim();
 
     // Check if the email already has an account in this gym
@@ -120,7 +123,7 @@ router.post(
       return;
     }
 
-    // Get gym name and inviter name
+    // Get gym name for the invite email
     const [gym] = await db
       .select({ name: gymsTable.name })
       .from(gymsTable)
@@ -134,14 +137,14 @@ router.post(
       email: normalizedEmail,
       token,
       expiresAt,
-      invitedByUserId: req.user!.id,
+      invitedByUserId: req.dbUser!.id,
     });
 
     try {
       await sendInviteEmail(
         normalizedEmail,
         gym?.name ?? "your gym",
-        req.user!.name ?? "The gym owner",
+        req.dbUser!.name ?? "The gym owner",
         token,
         getAppUrl(req),
       );
@@ -159,8 +162,8 @@ router.delete(
   requireOwner as (req: Request, res: Response, next: NextFunction) => void,
   async (req: Request, res: Response) => {
     const userId = req.params.userId as string;
-    const ownerGymId = req.user!.gymId!;
-    const ownerId = req.user!.id;
+    const ownerGymId = req.dbUser!.gymId!;
+    const ownerId = req.dbUser!.id;
 
     if (userId === ownerId) {
       res.status(400).json({ error: "You cannot remove yourself." });
@@ -187,13 +190,7 @@ router.delete(
       return;
     }
 
-    // Invalidate all active sessions for the removed user
-    await db
-      .delete(sessionsTable)
-      .where(sql`${sessionsTable.sess}->'user'->>'id' = ${userId}`);
-
     // Remove any invites sent by this user to avoid FK constraint violation on invitedByUserId.
-    // Only owners can send invites, so this is a defensive cleanup for edge cases.
     await db.delete(invitesTable).where(eq(invitesTable.invitedByUserId, userId as string));
 
     // Note: leads are scoped by gymId, not by userId, so no lead reassignment is needed.
@@ -212,7 +209,7 @@ router.post(
   requireOwner as (req: Request, res: Response, next: NextFunction) => void,
   async (req: Request, res: Response) => {
     const oldToken = req.params.token as string;
-    const gymId = req.user!.gymId!;
+    const gymId = req.dbUser!.gymId!;
 
     const [invite] = await db
       .select({
@@ -256,7 +253,7 @@ router.post(
       await sendInviteEmail(
         invite.email,
         gym?.name ?? "your gym",
-        req.user!.name ?? "The gym owner",
+        req.dbUser!.name ?? "The gym owner",
         newToken,
         getAppUrl(req),
       );
@@ -267,9 +264,6 @@ router.post(
     }
 
     // Email delivered — atomically replace the old invite in a transaction.
-    // If the insert fails the delete is rolled back, leaving the recipient
-    // without a valid link (the email was already sent). We handle that case
-    // by returning 500 so the owner knows something went wrong and can retry.
     try {
       await db.transaction(async (tx) => {
         await tx.delete(invitesTable).where(eq(invitesTable.token, oldToken));
@@ -278,7 +272,7 @@ router.post(
           email: invite.email,
           token: newToken,
           expiresAt,
-          invitedByUserId: req.user!.id,
+          invitedByUserId: req.dbUser!.id,
         });
       });
     } catch (err) {
@@ -297,7 +291,7 @@ router.delete(
   requireOwner as (req: Request, res: Response, next: NextFunction) => void,
   async (req: Request, res: Response) => {
     const token = req.params.token as string;
-    const gymId = req.user!.gymId!;
+    const gymId = req.dbUser!.gymId!;
 
     const [invite] = await db
       .select({ id: invitesTable.id, gymId: invitesTable.gymId })

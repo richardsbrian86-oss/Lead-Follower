@@ -619,55 +619,9 @@ export const UpdateSequenceTemplateResponse = zod.object({
 
 
 /**
- * @summary Get the currently authenticated user
+ * @summary Get the current authenticated user from the local database
  */
-export const GetCurrentAuthUserHeader = zod.object({
-  "Authorization": zod.string().optional().describe('Opaque session token — `Bearer <sid>`.')
-})
-
-export const GetCurrentAuthUserResponse = zod.object({
-  "user": zod.union([zod.object({
-  "id": zod.string(),
-  "email": zod.string().email().nullable(),
-  "name": zod.string().nullable(),
-  "role": zod.enum(['owner', 'staff']),
-  "gymId": zod.string().nullish().describe('The gym this user belongs to. Null for users not yet assigned to a gym.'),
-  "gymName": zod.string().nullish().describe('The name of the gym this user belongs to. Null for users not yet assigned to a gym.'),
-  "firstName": zod.string().nullable(),
-  "lastName": zod.string().nullable(),
-  "profileImageUrl": zod.string().nullable()
-}),zod.null()])
-})
-
-
-/**
- * @summary Create a new account with email and password
- */
-export const authRegisterBodyPasswordMin = 8;
-
-
-
-
-export const AuthRegisterBody = zod.object({
-  "email": zod.string().email(),
-  "password": zod.string().min(authRegisterBodyPasswordMin),
-  "name": zod.string().min(1)
-})
-
-export const AuthRegisterResponse = zod.object({
-  "message": zod.string()
-})
-
-
-/**
- * @summary Sign in with email and password
- */
-export const AuthLoginBody = zod.object({
-  "email": zod.string().email(),
-  "password": zod.string()
-})
-
-export const AuthLoginResponse = zod.object({
+export const GetCurrentUserResponse = zod.object({
   "user": zod.object({
   "id": zod.string(),
   "email": zod.string().email().nullable(),
@@ -677,59 +631,35 @@ export const AuthLoginResponse = zod.object({
   "firstName": zod.string().nullable(),
   "lastName": zod.string().nullable(),
   "profileImageUrl": zod.string().nullable()
-}),
-  "token": zod.string().describe('Session token (SID) — store in SecureStore for mobile Bearer auth')
+}).optional()
 })
 
 
 /**
- * @summary Verify email address via token link
+ * @summary Create a gym for the authenticated user (owner onboarding)
  */
-export const AuthVerifyEmailQueryParams = zod.object({
-  "token": zod.coerce.string().describe('Verification token sent to the user\'s email.')
+export const CreateGymBody = zod.object({
+  "gymName": zod.string()
 })
 
-export const AuthVerifyEmailResponse = zod.void()
-
-
-/**
- * @summary Request a password reset email
- */
-export const AuthForgotPasswordBody = zod.object({
-  "email": zod.string().email()
-})
-
-export const AuthForgotPasswordResponse = zod.object({
-  "message": zod.string()
+export const CreateGymResponse = zod.object({
+  "gym": zod.object({
+  "id": zod.string().optional(),
+  "name": zod.string().optional()
+}).optional()
 })
 
 
 /**
- * @summary Set a new password using a reset token
+ * @summary Validate an invite token and return gym + email info
  */
-export const authResetPasswordBodyPasswordMin = 8;
-
-
-
-export const AuthResetPasswordBody = zod.object({
-  "token": zod.string(),
-  "password": zod.string().min(authResetPasswordBodyPasswordMin)
+export const GetInviteDetailsParams = zod.object({
+  "token": zod.coerce.string()
 })
 
-export const AuthResetPasswordResponse = zod.object({
-  "message": zod.string()
-})
-
-
-/**
- * @summary Clear the current session
- */
-export const LogoutSessionHeader = zod.object({
-  "Authorization": zod.string().optional().describe('Opaque session token — `Bearer <sid>`.')
-})
-
-export const LogoutSessionResponse = zod.object({
-  "success": zod.boolean()
+export const GetInviteDetailsResponse = zod.object({
+  "email": zod.string(),
+  "gymName": zod.string()
 })
 
 

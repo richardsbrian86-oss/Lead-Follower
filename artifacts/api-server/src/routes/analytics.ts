@@ -101,7 +101,7 @@ async function fetchAllAnalyticsData(gymId: string) {
 
 router.get("/analytics/conversion-trend", async (req, res): Promise<void> => {
   try {
-    const gymId = req.user!.gymId!;
+    const gymId = req.dbUser!.gymId!;
     const result = await db.execute(sql`
       WITH weeks AS (
         SELECT generate_series(
@@ -142,7 +142,7 @@ router.get("/analytics/conversion-trend", async (req, res): Promise<void> => {
 
 router.get("/analytics/pipeline-funnel", async (req, res): Promise<void> => {
   try {
-    const gymId = req.user!.gymId!;
+    const gymId = req.dbUser!.gymId!;
     const statusOrder = ["new", "contacted", "interested", "won", "lost"] as const;
     const statusLabels: Record<string, string> = {
       new: "New",
@@ -178,7 +178,7 @@ router.get("/analytics/pipeline-funnel", async (req, res): Promise<void> => {
 
 router.get("/analytics/sequence-funnel", async (req, res): Promise<void> => {
   try {
-    const gymId = req.user!.gymId!;
+    const gymId = req.dbUser!.gymId!;
     const stepLabels: Record<number, string> = {
       1: "Step 1 – Outreach",
       2: "Step 2 – Follow-Up",
@@ -217,7 +217,7 @@ router.get("/analytics/sequence-funnel", async (req, res): Promise<void> => {
 
 router.get("/analytics/score-distribution", async (req, res): Promise<void> => {
   try {
-    const gymId = req.user!.gymId!;
+    const gymId = req.dbUser!.gymId!;
     const bucketDefs = [
       { label: "0–19", min: 0, max: 19 },
       { label: "20–39", min: 20, max: 39 },
@@ -260,7 +260,7 @@ router.get("/analytics/score-distribution", async (req, res): Promise<void> => {
 
 router.get("/analytics/pulse", async (req, res): Promise<void> => {
   try {
-    const gymId = req.user!.gymId!;
+    const gymId = req.dbUser!.gymId!;
     const now = new Date();
     const last7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const last30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -313,7 +313,7 @@ router.post("/analytics/insights", async (req, res): Promise<void> => {
   res.setHeader("Connection", "keep-alive");
 
   try {
-    const gymId = req.user!.gymId!;
+    const gymId = req.dbUser!.gymId!;
     const focus = req.body?.focus as string | undefined;
     const data = await fetchAllAnalyticsData(gymId);
 

@@ -35,7 +35,7 @@ router.get("/leads/:id/messages", async (req, res): Promise<void> => {
     return;
   }
 
-  const gymId = req.user!.gymId!;
+  const gymId = req.dbUser!.gymId!;
   const [lead] = await db.select().from(leadsTable).where(
     and(eq(leadsTable.id, params.data.id), eq(leadsTable.gymId, gymId))
   );
@@ -65,7 +65,7 @@ router.post("/leads/:id/messages/draft", async (req, res): Promise<void> => {
     return;
   }
 
-  const gymId = req.user!.gymId!;
+  const gymId = req.dbUser!.gymId!;
   const [lead] = await db.select().from(leadsTable).where(
     and(eq(leadsTable.id, params.data.id), eq(leadsTable.gymId, gymId))
   );
@@ -103,7 +103,7 @@ router.post("/leads/:id/messages/send", async (req, res): Promise<void> => {
     return;
   }
 
-  const gymId = req.user!.gymId!;
+  const gymId = req.dbUser!.gymId!;
   const [lead] = await db.select().from(leadsTable).where(
     and(eq(leadsTable.id, params.data.id), eq(leadsTable.gymId, gymId))
   );
