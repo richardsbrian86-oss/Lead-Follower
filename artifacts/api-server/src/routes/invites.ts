@@ -44,7 +44,7 @@ router.get(
   },
 );
 
-// GET /api/invites — list pending invites for the gym
+// GET /api/invites — list pending and expired invites for the gym
 router.get(
   "/invites",
   requireOwner as (req: Request, res: Response, next: NextFunction) => void,
@@ -52,7 +52,7 @@ router.get(
     const gymId = req.user!.gymId!;
     const now = new Date();
 
-    const invites = await db
+    const allInvites = await db
       .select({
         id: invitesTable.id,
         email: invitesTable.email,
@@ -67,11 +67,13 @@ router.get(
         and(
           eq(invitesTable.gymId, gymId),
           isNull(invitesTable.acceptedAt),
-          gt(invitesTable.expiresAt, now),
         ),
       );
 
-    res.json({ invites });
+    const invites = allInvites.filter((inv) => new Date(inv.expiresAt) > now);
+    const expiredInvites = allInvites.filter((inv) => new Date(inv.expiresAt) <= now);
+
+    res.json({ invites, expiredInvites });
   },
 );
 
@@ -201,6 +203,91 @@ router.delete(
     await db.delete(usersTable).where(eq(usersTable.id, userId));
 
     res.json({ message: "Staff member removed." });
+  },
+);
+
+// POST /api/invites/resend/:token — invalidate old token, issue a fresh one and re-send email
+router.post(
+  "/invites/resend/:token",
+  requireOwner as (req: Request, res: Response, next: NextFunction) => void,
+  async (req: Request, res: Response) => {
+    const oldToken = req.params.token as string;
+    const gymId = req.user!.gymId!;
+
+    const [invite] = await db
+      .select({
+        id: invitesTable.id,
+        gymId: invitesTable.gymId,
+        email: invitesTable.email,
+        acceptedAt: invitesTable.acceptedAt,
+      })
+      .from(invitesTable)
+      .where(eq(invitesTable.token, oldToken));
+
+    if (!invite) {
+      res.status(404).json({ error: "Invite not found." });
+      return;
+    }
+
+    if (invite.gymId !== gymId) {
+      res.status(403).json({ error: "You do not have permission to resend this invite." });
+      return;
+    }
+
+    if (invite.acceptedAt) {
+      res.status(409).json({ error: "This invite has already been accepted." });
+      return;
+    }
+
+    // Get gym name for the email
+    const [gym] = await db
+      .select({ name: gymsTable.name })
+      .from(gymsTable)
+      .where(eq(gymsTable.id, gymId));
+
+    // Generate a new token before touching the DB.
+    // Send the email first — only swap tokens once delivery succeeds so the
+    // invitee always has a usable link and the owner is never told "sent"
+    // when no email was actually delivered.
+    const newToken = generateToken();
+    const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
+
+    try {
+      await sendInviteEmail(
+        invite.email,
+        gym?.name ?? "your gym",
+        req.user!.name ?? "The gym owner",
+        newToken,
+        getAppUrl(req),
+      );
+    } catch (err) {
+      req.log?.warn({ err }, "Failed to send resend invite email; old invite preserved");
+      res.status(502).json({ error: "Failed to send the invite email. The previous invite link is still valid." });
+      return;
+    }
+
+    // Email delivered — atomically replace the old invite in a transaction.
+    // If the insert fails the delete is rolled back, leaving the recipient
+    // without a valid link (the email was already sent). We handle that case
+    // by returning 500 so the owner knows something went wrong and can retry.
+    try {
+      await db.transaction(async (tx) => {
+        await tx.delete(invitesTable).where(eq(invitesTable.token, oldToken));
+        await tx.insert(invitesTable).values({
+          gymId,
+          email: invite.email,
+          token: newToken,
+          expiresAt,
+          invitedByUserId: req.user!.id,
+        });
+      });
+    } catch (err) {
+      req.log?.error({ err }, "Failed to swap invite tokens after email delivery");
+      res.status(500).json({ error: "Email was sent but we could not update the invite record. Please revoke the old invite and send a new one." });
+      return;
+    }
+
+    res.json({ message: "Invite resent successfully." });
   },
 );
 

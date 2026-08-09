@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
-import { UserPlus, Trash2, Users, Mail, Clock } from "lucide-react";
+import { UserPlus, Trash2, Users, Mail, Clock, RefreshCw, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface Member {
@@ -19,6 +19,11 @@ interface Invite {
   expiresAt: string;
   createdAt: string;
   inviterName: string | null;
+}
+
+interface InvitesResponse {
+  invites: Invite[];
+  expiredInvites: Invite[];
 }
 
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
@@ -39,6 +44,8 @@ export default function Team() {
   const queryClient = useQueryClient();
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteError, setInviteError] = useState("");
+  const [resendSuccess, setResendSuccess] = useState<string | null>(null);
+  const [resendError, setResendError] = useState<{ token: string; message: string } | null>(null);
 
   const membersQuery = useQuery({
     queryKey: ["team-members"],
@@ -47,7 +54,7 @@ export default function Team() {
 
   const invitesQuery = useQuery({
     queryKey: ["pending-invites"],
-    queryFn: () => apiFetch<{ invites: Invite[] }>("/api/invites"),
+    queryFn: () => apiFetch<InvitesResponse>("/api/invites"),
   });
 
   const sendInviteMutation = useMutation({
@@ -74,6 +81,21 @@ export default function Team() {
     },
   });
 
+  const resendInviteMutation = useMutation({
+    mutationFn: (token: string) =>
+      apiFetch(`/api/invites/resend/${token}`, { method: "POST" }),
+    onSuccess: (_data, token) => {
+      setResendSuccess(token);
+      setResendError(null);
+      queryClient.invalidateQueries({ queryKey: ["pending-invites"] });
+      setTimeout(() => setResendSuccess(null), 4000);
+    },
+    onError: (err: Error, token) => {
+      setResendError({ token, message: err.message });
+      setResendSuccess(null);
+    },
+  });
+
   const removeMemberMutation = useMutation({
     mutationFn: (userId: string) =>
       apiFetch(`/api/team/members/${userId}`, { method: "DELETE" }),
@@ -96,6 +118,7 @@ export default function Team() {
 
   const members = membersQuery.data?.members ?? [];
   const invites = invitesQuery.data?.invites ?? [];
+  const expiredInvites = invitesQuery.data?.expiredInvites ?? [];
 
   return (
     <div className="space-y-8 max-w-3xl">
@@ -256,6 +279,73 @@ export default function Team() {
               ))}
             </ul>
           )}
+        </div>
+      )}
+
+      {/* Expired invites — owner only */}
+      {isOwner && expiredInvites.length > 0 && (
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <div className="px-6 py-4 border-b border-border flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-500" />
+            <h2 className="text-base font-semibold text-foreground">
+              Expired invites ({expiredInvites.length})
+            </h2>
+          </div>
+          <ul className="divide-y divide-border">
+            {expiredInvites.map((inv) => (
+              <li
+                key={inv.id}
+                className="px-6 py-4 flex items-center justify-between gap-4"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-foreground truncate">
+                    {inv.email}
+                  </div>
+                  <div className="text-xs text-amber-600 flex items-center gap-1 mt-0.5">
+                    <Clock className="w-3 h-3" />
+                    Expired {new Date(inv.expiresAt).toLocaleDateString()}
+                    {inv.inviterName && (
+                      <span className="text-muted-foreground ml-1">
+                        · Invited by {inv.inviterName}
+                      </span>
+                    )}
+                  </div>
+                  {resendSuccess === inv.token && (
+                    <p className="text-xs text-green-600 mt-1">
+                      Invite resent! A new email has been sent.
+                    </p>
+                  )}
+                  {resendError?.token === inv.token && (
+                    <p className="text-xs text-destructive mt-1">
+                      {resendError.message}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => resendInviteMutation.mutate(inv.token)}
+                    disabled={resendInviteMutation.isPending}
+                    className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+                    title="Resend invite"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Resend</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => revokeInviteMutation.mutate(inv.token)}
+                    disabled={revokeInviteMutation.isPending}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                    title="Delete expired invite"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Delete</span>
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
