@@ -19,6 +19,11 @@ export interface AuthUser {
      * @nullable
      */
   gymId?: string | null;
+  /**
+     * The name of the gym this user belongs to. Null for users not yet assigned to a gym.
+     * @nullable
+     */
+  gymName?: string | null;
   /** @nullable */
   firstName: string | null;
   /** @nullable */

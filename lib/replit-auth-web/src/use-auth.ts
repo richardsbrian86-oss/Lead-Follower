@@ -6,6 +6,8 @@ export interface AuthUser {
   email: string | null;
   name: string | null;
   role: string;
+  gymId?: string | null;
+  gymName?: string | null;
   firstName: string | null;
   lastName: string | null;
   profileImageUrl: string | null;

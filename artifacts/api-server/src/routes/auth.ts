@@ -50,13 +50,14 @@ function buildUserPayload(user: {
   firstName: string | null;
   lastName: string | null;
   profileImageUrl: string | null;
-}) {
+}, gymName?: string | null) {
   return {
     id: user.id,
     email: user.email,
     name: user.name,
     role: user.role as AuthUserRole,
     gymId: user.gymId ?? null,
+    gymName: gymName ?? null,
     firstName: user.firstName,
     lastName: user.lastName,
     profileImageUrl: user.profileImageUrl,
@@ -208,14 +209,23 @@ router.post("/auth/login", async (req: Request, res: Response) => {
     return;
   }
 
+  let gymName: string | null = null;
+  if (user.gymId) {
+    const [gym] = await db
+      .select({ name: gymsTable.name })
+      .from(gymsTable)
+      .where(eq(gymsTable.id, user.gymId));
+    gymName = gym?.name ?? null;
+  }
+
   const sessionData: SessionData = {
-    user: buildUserPayload(user),
+    user: buildUserPayload(user, gymName),
   };
 
   const sid = await createSession(sessionData);
   setSessionCookie(res, sid);
 
-  res.json({ user: buildUserPayload(user), token: sid });
+  res.json({ user: buildUserPayload(user, gymName), token: sid });
 });
 
 router.get("/auth/verify-email", async (req: Request, res: Response) => {
@@ -332,12 +342,19 @@ router.post("/auth/accept-invite", async (req: Request, res: Response) => {
     .set({ acceptedAt: new Date() })
     .where(eq(invitesTable.token, token));
 
+  // Fetch gym name for the session payload
+  const [inviteGym] = await db
+    .select({ name: gymsTable.name })
+    .from(gymsTable)
+    .where(eq(gymsTable.id, invite.gymId));
+  const inviteGymName = inviteGym?.name ?? null;
+
   // Create session (auto-login)
-  const sessionData: SessionData = { user: buildUserPayload(user) };
+  const sessionData: SessionData = { user: buildUserPayload(user, inviteGymName) };
   const sid = await createSession(sessionData);
   setSessionCookie(res, sid);
 
-  res.status(201).json({ user: buildUserPayload(user) });
+  res.status(201).json({ user: buildUserPayload(user, inviteGymName) });
 });
 
 router.post("/auth/forgot-password", async (req: Request, res: Response) => {

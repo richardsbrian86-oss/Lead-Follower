@@ -91,7 +91,11 @@ export function Layout({ children }: LayoutProps) {
           )}
           <div className="text-sm flex-1 min-w-0">
             <div className="font-semibold text-sidebar-foreground truncate">{displayName}</div>
-            <div className="text-muted-foreground text-xs truncate">{user?.email ?? "Sales Manager"}</div>
+            {user?.gymName ? (
+              <div className="text-muted-foreground text-xs truncate">{user.gymName}</div>
+            ) : (
+              <div className="text-muted-foreground text-xs truncate">{user?.email ?? "Sales Manager"}</div>
+            )}
           </div>
           <button
             onClick={logout}
