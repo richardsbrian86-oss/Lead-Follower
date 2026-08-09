@@ -17,6 +17,7 @@ import {
   registerUnverifiedUser,
   setResetToken,
   deleteTestUserByEmail,
+  insertUnverifiedUserWithToken,
 } from "../helpers/auth.js";
 
 function uid(): string {
@@ -246,6 +247,85 @@ test.describe("Reset password flow", () => {
     } finally {
       await deleteTestUserByEmail(email);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Email verification flow
+// ---------------------------------------------------------------------------
+
+test.describe("Email verification flow", () => {
+  test("valid token — account activated and landing page shows success banner", async ({
+    page,
+  }) => {
+    const email = `verify-ok-${uid()}@test.example`;
+    const token = crypto.randomBytes(32).toString("hex");
+    await insertUnverifiedUserWithToken(email, token);
+
+    try {
+      // Navigate to the verify-email API endpoint (as a real user would via email link)
+      await page.goto(`/api/auth/verify-email?token=${token}`);
+
+      // Should redirect to the frontend landing page with ?verified=true
+      await expect(page).toHaveURL(/verified=true/);
+
+      // Success banner should be visible on the landing page
+      await expect(
+        page.getByTestId("verified-success"),
+      ).toBeVisible();
+      await expect(
+        page.getByText(/email verified/i),
+      ).toBeVisible();
+    } finally {
+      await deleteTestUserByEmail(email);
+    }
+  });
+
+  test("invalid token — redirects to landing page with invalid banner", async ({
+    page,
+  }) => {
+    await page.goto(
+      "/api/auth/verify-email?token=definitely-not-a-real-token-xyz",
+    );
+
+    // Should redirect to the frontend landing page with ?verified=invalid
+    await expect(page).toHaveURL(/verified=invalid/);
+
+    await expect(
+      page.getByTestId("verified-invalid"),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/invalid or has expired/i),
+    ).toBeVisible();
+  });
+
+  test("expired token — redirects with invalid status", async ({ page }) => {
+    const email = `verify-exp-${uid()}@test.example`;
+    const token = crypto.randomBytes(32).toString("hex");
+    // expiresInMs = -1000 means the token is already in the past
+    await insertUnverifiedUserWithToken(email, token, -1000);
+
+    try {
+      await page.goto(`/api/auth/verify-email?token=${token}`);
+
+      await expect(page).toHaveURL(/verified=invalid/);
+
+      await expect(
+        page.getByTestId("verified-invalid"),
+      ).toBeVisible();
+    } finally {
+      await deleteTestUserByEmail(email);
+    }
+  });
+
+  test("missing token — redirects with invalid status", async ({ page }) => {
+    await page.goto("/api/auth/verify-email");
+
+    await expect(page).toHaveURL(/verified=invalid/);
+
+    await expect(
+      page.getByTestId("verified-invalid"),
+    ).toBeVisible();
   });
 });
 

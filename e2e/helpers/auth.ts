@@ -160,6 +160,33 @@ export async function createTestInvite(
 }
 
 /**
+ * Insert (or reset) a user row with a pending verify token.
+ * emailVerified is forced to false.  Useful for testing the verify-email flow
+ * without going through the full registration API.
+ */
+export async function insertUnverifiedUserWithToken(
+  email: string,
+  token: string,
+  expiresInMs: number = 24 * 60 * 60 * 1000,
+): Promise<void> {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    const expiresAt = new Date(Date.now() + expiresInMs);
+    await pool.query(
+      `INSERT INTO users (email, email_verified, verify_token, verify_token_expiry, role)
+       VALUES ($1, false, $2, $3, 'staff')
+       ON CONFLICT (email) DO UPDATE
+         SET email_verified      = false,
+             verify_token        = $2,
+             verify_token_expiry = $3`,
+      [email.toLowerCase().trim(), token, expiresAt.toISOString()],
+    );
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
  * Delete a gym and ALL associated data (invites, users, sessions) by owner email.
  * Use this for full invite-test cleanup.
  */

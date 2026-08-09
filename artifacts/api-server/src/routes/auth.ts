@@ -4,6 +4,16 @@ import { db, usersTable, gymsTable, invitesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 
+// Resolve the frontend origin for redirects.
+// In the Replit proxy environment both the API (/api/*) and the frontend (/)
+// share the same public hostname, so a root-relative redirect works.
+function frontendUrl(req: Request, path: string): string {
+  // path must start with "/"
+  const proto = req.get("x-forwarded-proto") ?? req.protocol;
+  const host = req.get("x-forwarded-host") ?? req.get("host") ?? "localhost";
+  return `${proto}://${host}${path}`;
+}
+
 const router: IRouter = Router();
 
 function createGymSlug(gymName: string): string {
@@ -126,6 +136,42 @@ router.post(
     res.json({ gymId: invite.gymId });
   },
 );
+
+// GET /auth/verify-email — public: activate an account via a one-time token
+// sent in the verification email.  Always redirects (never JSON) so that
+// clicking the link in an email client works without any JS.
+router.get("/auth/verify-email", async (req: Request, res: Response) => {
+  const token = typeof req.query.token === "string" ? req.query.token.trim() : "";
+
+  const invalidUrl = frontendUrl(req, "/?verified=invalid");
+
+  if (!token) {
+    res.redirect(invalidUrl);
+    return;
+  }
+
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.verifyToken, token))
+    .limit(1);
+
+  if (!user || !user.verifyTokenExpiry || user.verifyTokenExpiry < new Date()) {
+    res.redirect(invalidUrl);
+    return;
+  }
+
+  await db
+    .update(usersTable)
+    .set({
+      emailVerified: true,
+      verifyToken: null,
+      verifyTokenExpiry: null,
+    })
+    .where(eq(usersTable.id, user.id));
+
+  res.redirect(frontendUrl(req, "/?verified=true"));
+});
 
 // GET /auth/invite/:token — public: validate invite token, return gym name + email
 router.get("/auth/invite/:token", async (req: Request, res: Response) => {

@@ -395,8 +395,20 @@ function HomeRedirect() {
 // ─── Landing page for unauthenticated users ───────────────────────────────────
 function LandingPage() {
   const [, setLocation] = useLocation();
+  const verified = new URLSearchParams(window.location.search).get("verified");
+
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 gap-8">
+      {verified === "true" && (
+        <div className="w-full max-w-sm px-4 py-3 rounded-lg bg-green-900/30 border border-green-700/50 text-green-300 text-sm text-center" data-testid="verified-success">
+          ✓ Email verified! You can now sign in.
+        </div>
+      )}
+      {verified === "invalid" && (
+        <div className="w-full max-w-sm px-4 py-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm text-center" data-testid="verified-invalid">
+          Verification link is invalid or has expired.
+        </div>
+      )}
       <div className="flex flex-col items-center gap-4 text-center">
         <img src="/flow-state-logo.png" alt="Flow State CRM" className="w-52 h-auto object-contain" />
         <div>
