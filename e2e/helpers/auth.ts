@@ -1,90 +1,79 @@
+/**
+ * Auth test helpers — DB-level fixtures only.
+ *
+ * After the Clerk migration, registration/login/logout are handled by Clerk.
+ * These helpers only perform direct DB operations for test fixture setup and
+ * teardown, or for flows that are still owned by our API (e.g. email
+ * verification, invite consumption).
+ *
+ * Removed after Clerk migration (called non-existent endpoints):
+ *   - registerUnverifiedUser  → /api/auth/register is gone
+ *   - setResetToken           → Clerk owns password reset
+ *
+ * Updated after Clerk migration:
+ *   - registerAndVerifyUser   → now a pure DB insert (no API call)
+ */
+
 import pg from "pg";
+import crypto from "crypto";
 
 const { Pool } = pg;
-
-const BASE_URL = process.env.REPLIT_DEV_DOMAIN
-  ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-  : "http://localhost:3000";
 
 const DEFAULT_GYM_ID = "00000000-0000-0000-0000-000000000001";
 
 /**
- * Register a user via the API (creates gym + owner account), then flip
- * email_verified=true directly in the DB so tests can log in without email.
- * If the email already exists (409) we just verify it and move on.
+ * Create a verified owner user with their own gym directly in the DB.
+ * Replaces the old API-based registration helper; Clerk now owns the
+ * registration flow so we can no longer call /api/auth/register.
+ *
+ * The `password` parameter is accepted for call-site compatibility but is
+ * NOT stored — Clerk manages credentials and the local DB has no password hash
+ * after the migration.
  */
 export async function registerAndVerifyUser(
   email: string,
-  password: string,
+  _password: string,
   name: string,
   gymName: string = "Test Gym",
-): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/auth/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password, name, gymName }),
-  });
-
-  if (!res.ok && res.status !== 409) {
-    throw new Error(
-      `registerAndVerifyUser: register request failed ${res.status}: ${await res.text()}`,
-    );
-  }
-
+): Promise<{ gymId: string }> {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   try {
-    await pool.query(
-      `UPDATE users
-         SET email_verified = true,
-             verify_token   = null,
-             verify_token_expiry = null
-       WHERE email = $1`,
-      [email.toLowerCase().trim()],
-    );
-  } finally {
-    await pool.end();
-  }
-}
+    // Create a gym for this owner
+    const slug =
+      gymName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 40) +
+      "-" +
+      crypto.randomBytes(4).toString("hex");
 
-/**
- * Register an unverified user (no DB update — emailVerified stays false).
- * The registration endpoint assigns a gym and gymId automatically.
- */
-export async function registerUnverifiedUser(
-  email: string,
-  password: string,
-  name: string,
-  gymName: string = "Test Gym",
-): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/auth/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password, name, gymName }),
-  });
-
-  if (!res.ok && res.status !== 409) {
-    throw new Error(
-      `registerUnverifiedUser: register request failed ${res.status}: ${await res.text()}`,
+    const { rows: gymRows } = await pool.query(
+      `INSERT INTO gyms (name, slug) VALUES ($1, $2) RETURNING id`,
+      [gymName, slug],
     );
-  }
-}
+    const gymId = gymRows[0].id as string;
 
-/**
- * Create a verified user and inject a reset token with the given expiry.
- */
-export async function setResetToken(
-  email: string,
-  resetToken: string,
-  expiry: Date,
-): Promise<void> {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  try {
-    await pool.query(
-      `UPDATE users
-         SET reset_token = $1, reset_token_expiry = $2
-       WHERE email = $3`,
-      [resetToken, expiry.toISOString(), email.toLowerCase().trim()],
+    const [firstName, ...rest] = name.split(" ");
+    const lastName = rest.join(" ") || null;
+
+    // Fetch gymId for the existing user if there's a conflict, otherwise use
+    // the newly-created gym.  Tests always use unique UIDs so conflicts are rare.
+    const { rows: userRows } = await pool.query(
+      `INSERT INTO users (email, name, first_name, last_name, role, gym_id, email_verified)
+       VALUES ($1, $2, $3, $4, 'owner', $5, true)
+       ON CONFLICT (email) DO UPDATE
+         SET name           = EXCLUDED.name,
+             first_name     = EXCLUDED.first_name,
+             last_name      = EXCLUDED.last_name,
+             role           = EXCLUDED.role,
+             gym_id         = EXCLUDED.gym_id,
+             email_verified = true
+       RETURNING gym_id`,
+      [email.toLowerCase().trim(), name, firstName, lastName, gymId],
     );
+
+    return { gymId: userRows[0].gym_id as string };
   } finally {
     await pool.end();
   }

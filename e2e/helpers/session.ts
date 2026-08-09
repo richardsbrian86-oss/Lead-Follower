@@ -13,26 +13,27 @@ export interface TestUser {
   gymId?: string;
 }
 
-export async function createTestUser(user: TestUser): Promise<void> {
+export async function createTestUser(user: TestUser, role: string = "staff"): Promise<void> {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   try {
     await pool.query(
-      `INSERT INTO users (id, email, first_name, last_name, gym_id)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO users (id, email, first_name, last_name, gym_id, role)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (id) DO UPDATE SET
          email = EXCLUDED.email,
          first_name = EXCLUDED.first_name,
          last_name = EXCLUDED.last_name,
-         gym_id = EXCLUDED.gym_id`,
-      [user.id, user.email, user.firstName, user.lastName, user.gymId ?? DEFAULT_GYM_ID],
+         gym_id = EXCLUDED.gym_id,
+         role = EXCLUDED.role`,
+      [user.id, user.email, user.firstName, user.lastName, user.gymId ?? DEFAULT_GYM_ID, role],
     );
   } finally {
     await pool.end();
   }
 }
 
-export async function createTestSession(user: TestUser): Promise<string> {
-  await createTestUser(user);
+export async function createTestSession(user: TestUser, role: string = "staff"): Promise<string> {
+  await createTestUser(user, role);
 
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   try {
@@ -43,7 +44,7 @@ export async function createTestSession(user: TestUser): Promise<string> {
         id: user.id,
         email: user.email,
         name: [user.firstName, user.lastName].filter(Boolean).join(" ") || null,
-        role: "staff",
+        role,
         gymId,
         firstName: user.firstName,
         lastName: user.lastName,
