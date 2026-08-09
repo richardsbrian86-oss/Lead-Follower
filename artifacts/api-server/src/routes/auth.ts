@@ -1,8 +1,9 @@
 import crypto from "crypto";
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db, usersTable, gymsTable, invitesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { sendInviteAcceptedEmail } from "../lib/email";
 
 // Resolve the frontend origin for redirects.
 // In the Replit proxy environment both the API (/api/*) and the frontend (/)
@@ -132,6 +133,31 @@ router.post(
         .set({ acceptedAt: new Date() })
         .where(eq(invitesTable.id, invite.id));
     });
+
+    // Notify the gym owner — fire-and-forget (don't block the response)
+    void (async () => {
+      try {
+        const [owner, gym] = await Promise.all([
+          db
+            .select({ email: usersTable.email })
+            .from(usersTable)
+            .where(and(eq(usersTable.gymId, invite.gymId), eq(usersTable.role, "owner")))
+            .limit(1)
+            .then((rows) => rows[0]),
+          db
+            .select({ name: gymsTable.name })
+            .from(gymsTable)
+            .where(eq(gymsTable.id, invite.gymId))
+            .limit(1)
+            .then((rows) => rows[0]),
+        ]);
+        if (owner?.email) {
+          await sendInviteAcceptedEmail(owner.email, user.email ?? invite.email, gym?.name ?? "your gym");
+        }
+      } catch (err) {
+        console.error("[invite-accepted] failed to send owner notification:", err);
+      }
+    })();
 
     res.json({ gymId: invite.gymId });
   },

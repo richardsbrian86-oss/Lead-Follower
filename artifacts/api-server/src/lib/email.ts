@@ -69,6 +69,30 @@ export async function sendPasswordResetEmail(
   });
 }
 
+export async function sendInviteAcceptedEmail(
+  to: string,
+  staffEmail: string,
+  gymName: string,
+): Promise<void> {
+  await getResend().emails.send({
+    from: FROM,
+    to,
+    subject: `${staffEmail} has joined ${gymName} on Flow State`,
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
+        <h2 style="color:#0d1b2a;margin-bottom:8px">A staff member has joined!</h2>
+        <p style="color:#555;margin-bottom:24px">
+          <strong>${staffEmail}</strong> has accepted their invite and joined
+          <strong>${gymName}</strong> on Flow State CRM.
+        </p>
+        <p style="color:#999;font-size:12px;margin-top:24px">
+          You can manage your team on the Team page of your gym dashboard.
+        </p>
+      </div>
+    `,
+  });
+}
+
 export async function sendInviteEmail(
   to: string,
   gymName: string,

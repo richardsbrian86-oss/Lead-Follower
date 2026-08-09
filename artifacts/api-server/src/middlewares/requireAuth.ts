@@ -1,8 +1,9 @@
 import { type Request, type Response, type NextFunction } from "express";
 import { getAuth } from "@clerk/express";
 import { eq, and, isNull, gt } from "drizzle-orm";
-import { db, usersTable, invitesTable } from "@workspace/db";
+import { db, usersTable, invitesTable, gymsTable } from "@workspace/db";
 import type { User } from "@workspace/db";
+import { sendInviteAcceptedEmail } from "../lib/email";
 
 declare global {
   namespace Express {
@@ -92,6 +93,31 @@ export async function requireAuth(
           .update(invitesTable)
           .set({ acceptedAt: new Date() })
           .where(eq(invitesTable.id, invite.id));
+
+        // Fire-and-forget: notify the gym owner
+        void (async () => {
+          try {
+            const [owner, gym] = await Promise.all([
+              db
+                .select({ email: usersTable.email })
+                .from(usersTable)
+                .where(and(eq(usersTable.gymId, invite.gymId), eq(usersTable.role, "owner")))
+                .limit(1)
+                .then((rows) => rows[0]),
+              db
+                .select({ name: gymsTable.name })
+                .from(gymsTable)
+                .where(eq(gymsTable.id, invite.gymId))
+                .limit(1)
+                .then((rows) => rows[0]),
+            ]);
+            if (owner?.email) {
+              await sendInviteAcceptedEmail(owner.email, email, gym?.name ?? "your gym");
+            }
+          } catch (err) {
+            console.error("[invite-accepted] failed to send owner notification:", err);
+          }
+        })();
       }
     } else {
       // Race condition: another concurrent request inserted first
