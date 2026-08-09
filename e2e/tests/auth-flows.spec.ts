@@ -379,6 +379,30 @@ test.describe("Email verification flow", () => {
       page.getByRole("heading", { name: "Welcome back" }),
     ).toBeVisible();
   });
+
+  test("pressing back after 'Sign in now' does not re-show the verified banner", async ({
+    page,
+  }) => {
+    // Navigate to the verified landing page (as the email link would deliver)
+    await page.goto("/?verified=true");
+    await expect(page.getByTestId("verified-success")).toBeVisible();
+
+    // Click "Sign in now →" — this should replace the ?verified=true history entry
+    // with the bare "/" so pressing Back does not return to the banner URL.
+    await page.getByTestId("sign-in-now").click();
+    await expect(page).toHaveURL(/sign-in/);
+
+    // Simulate the user pressing the browser back button
+    await page.goBack();
+
+    // We should be back on the landing page but WITHOUT the ?verified=true param.
+    // The replaceState call in the click handler swapped /?verified=true → /
+    // in the history stack, so going back lands on / (no query string).
+    await expect(page).not.toHaveURL(/verified=true/);
+
+    // The success banner must not be visible — it was a one-time notification
+    await expect(page.getByTestId("verified-success")).not.toBeVisible();
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -417,7 +417,13 @@ function LandingPage() {
           <p>✓ Email verified! You can now sign in.</p>
           <button
             type="button"
-            onClick={() => setLocation("/sign-in")}
+            onClick={() => {
+              // Replace the current history entry (/?verified=true) with the
+              // bare landing path so that pressing Back from the sign-in page
+              // returns to "/" instead of re-showing this banner.
+              window.history.replaceState(null, "", basePath || "/");
+              setLocation("/sign-in");
+            }}
             data-testid="sign-in-now"
             className="inline-block px-4 py-1.5 rounded-lg font-semibold text-sm text-[#0d1b2a] hover:opacity-90 transition-opacity"
             style={{ background: "linear-gradient(135deg, #00c8f0 0%, #0099bb 100%)" }}
