@@ -327,6 +327,28 @@ test.describe("Email verification flow", () => {
       page.getByTestId("verified-invalid"),
     ).toBeVisible();
   });
+
+  test("verified banner shows 'Sign in now' button that navigates to sign-in", async ({
+    page,
+  }) => {
+    // Navigate directly to the landing page with ?verified=true to test the banner UI
+    await page.goto("/?verified=true");
+
+    // The success banner should be visible
+    await expect(page.getByTestId("verified-success")).toBeVisible();
+
+    // The "Sign in now" button should be present inside the banner
+    const signInNowBtn = page.getByTestId("sign-in-now");
+    await expect(signInNowBtn).toBeVisible();
+    await expect(signInNowBtn).toHaveText("Sign in now →");
+
+    // Clicking it should navigate to the /sign-in route and render the Clerk SignIn component
+    await signInNowBtn.click();
+    await expect(page).toHaveURL(/sign-in/);
+    await expect(
+      page.getByRole("heading", { name: "Welcome back" }),
+    ).toBeVisible();
+  });
 });
 
 // ---------------------------------------------------------------------------

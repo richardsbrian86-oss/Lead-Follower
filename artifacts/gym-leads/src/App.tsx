@@ -400,8 +400,17 @@ function LandingPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 gap-8">
       {verified === "true" && (
-        <div className="w-full max-w-sm px-4 py-3 rounded-lg bg-green-900/30 border border-green-700/50 text-green-300 text-sm text-center" data-testid="verified-success">
-          ✓ Email verified! You can now sign in.
+        <div className="w-full max-w-sm px-4 py-3 rounded-lg bg-green-900/30 border border-green-700/50 text-green-300 text-sm text-center space-y-2" data-testid="verified-success">
+          <p>✓ Email verified! You can now sign in.</p>
+          <button
+            type="button"
+            onClick={() => setLocation("/sign-in")}
+            data-testid="sign-in-now"
+            className="inline-block px-4 py-1.5 rounded-lg font-semibold text-sm text-[#0d1b2a] hover:opacity-90 transition-opacity"
+            style={{ background: "linear-gradient(135deg, #00c8f0 0%, #0099bb 100%)" }}
+          >
+            Sign in now →
+          </button>
         </div>
       )}
       {verified === "invalid" && (
