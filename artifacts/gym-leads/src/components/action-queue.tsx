@@ -11,13 +11,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Zap, Phone, MessageSquare, ArrowRight, ChevronDown, ChevronUp, AlertTriangle, RefreshCw, Clock, CheckCircle } from "lucide-react";
+import { Zap, Phone, MessageSquare, ArrowRight, ChevronDown, ChevronUp, AlertTriangle, RefreshCw, Clock, CheckCircle, X } from "lucide-react";
 import { Link } from "wouter";
 import { StatusBadge } from "@/components/status-badge";
 import { ScoreBadge } from "@/components/score-badge";
 import { SendMessageModal } from "@/components/send-message-modal";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useDismissedLeads } from "@/hooks/use-dismissed-leads";
 
 function reasonColor(reason: string): { border: string; pill: string } {
   const r = reason.toLowerCase();
@@ -39,9 +40,10 @@ interface ActionCardProps {
   item: ActionItem;
   onMarkContacted: (leadId: number) => void;
   isMarkingContacted: boolean;
+  onDismiss: (leadId: number) => void;
 }
 
-function ActionCard({ item, onMarkContacted, isMarkingContacted }: ActionCardProps) {
+function ActionCard({ item, onMarkContacted, isMarkingContacted, onDismiss }: ActionCardProps) {
   const [msgOpen, setMsgOpen] = useState(false);
   const { border, pill } = reasonColor(item.primaryReason);
   const isInterested = item.status === "interested";
@@ -123,10 +125,17 @@ function ActionCard({ item, onMarkContacted, isMarkingContacted }: ActionCardPro
               <ArrowRight className="w-4 h-4" />
             </button>
           </Link>
+          <button
+            onClick={() => onDismiss(item.leadId)}
+            className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-secondary/60 hover:bg-muted hover:text-muted-foreground transition-colors"
+            title="Dismiss for today"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
-      <SendMessageModal leadId={item.leadId} open={msgOpen} onClose={() => setMsgOpen(false)} />
+      <SendMessageModal leadId={item.leadId} open={msgOpen} onClose={() => setMsgOpen(false)} onDismiss={onDismiss} />
     </>
   );
 }
@@ -139,6 +148,7 @@ export function ActionQueue() {
   const { toast } = useToast();
   const updateLead = useUpdateLead();
   const createEvent = useCreateLeadEvent();
+  const { dismissed, dismiss } = useDismissedLeads();
 
   const { data, isLoading, isError, dataUpdatedAt, refetch } = useGetDashboardActionQueue({
     query: {
@@ -147,7 +157,8 @@ export function ActionQueue() {
     },
   });
 
-  const actions = data?.actions ?? [];
+  const allActions = data?.actions ?? [];
+  const actions = allActions.filter((a) => !dismissed.has(a.leadId));
   const count = actions.length;
   const hasStaleData = isError && data !== undefined;
 
@@ -179,6 +190,7 @@ export function ActionQueue() {
         {
           onSuccess: () => {
             optimisticallyRemove();
+            dismiss(leadId);
             toast({ title: "Contact logged", description: `${item.name} marked as contacted.` });
           },
           onError: () => {
@@ -195,6 +207,7 @@ export function ActionQueue() {
         {
           onSuccess: () => {
             optimisticallyRemove();
+            dismiss(leadId);
             toast({ title: "Marked as contacted", description: `${item.name} moved to contacted.` });
           },
           onError: () => {
@@ -292,6 +305,7 @@ export function ActionQueue() {
                   item={item}
                   onMarkContacted={handleMarkContacted}
                   isMarkingContacted={markingIds.has(item.leadId)}
+                  onDismiss={dismiss}
                 />
               ))}
             </div>

@@ -51,6 +51,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { statusConfig, StatusBadge } from "@/components/status-badge";
+import { dismissLeadForToday } from "@/hooks/use-dismissed-leads";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SendMessageModal } from "@/components/send-message-modal";
 import { MessageHistory } from "@/components/message-history";
@@ -168,6 +169,9 @@ export default function LeadDetail() {
               ),
             };
           });
+          // Auto-dismiss from the action queue so the lead doesn't appear as
+          // unhandled when the staff member returns to the dashboard.
+          dismissLeadForToday(id);
           toast({ title: "Note Added", description: "Successfully added to timeline." });
         },
       },

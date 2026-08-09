@@ -23,17 +23,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { dismissLeadForToday } from "@/hooks/use-dismissed-leads";
 import { Sparkles, Send, Loader2 } from "lucide-react";
 
 interface SendMessageModalProps {
   leadId: number;
   open: boolean;
   onClose: () => void;
+  /** Called with leadId on a successful send so the caller can update live dismiss state. */
+  onDismiss?: (leadId: number) => void;
 }
 
 type Channel = "email" | "sms";
 
-export function SendMessageModal({ leadId, open, onClose }: SendMessageModalProps) {
+export function SendMessageModal({ leadId, open, onClose, onDismiss }: SendMessageModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [channel, setChannel] = useState<Channel>("email");
@@ -70,6 +73,11 @@ export function SendMessageModal({ leadId, open, onClose }: SendMessageModalProp
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetLeadMessagesQueryKey(leadId) });
           queryClient.invalidateQueries({ queryKey: getGetDashboardActionQueueQueryKey() });
+          // Persist to sessionStorage so any other page that mounts the hook picks it up.
+          dismissLeadForToday(leadId);
+          // Also call the live React-state dismiss if available (e.g. when opened from ActionQueue)
+          // so the card disappears immediately without waiting for a re-mount.
+          onDismiss?.(leadId);
           toast({ title: "Message sent!", description: `${channel === "email" ? "Email" : "SMS"} delivered successfully.` });
           setSubject("");
           setBody("");
