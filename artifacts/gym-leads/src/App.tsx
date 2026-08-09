@@ -41,11 +41,11 @@ const clerkPubKey = publishableKeyFromHost(
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
 );
 
-// REQUIRED — copy verbatim. Empty in dev (Clerk hits FAPI directly), auto-set in prod.
-// Always proxy Clerk FAPI through our server so session cookies work on the
-// same domain in all environments. VITE_CLERK_PROXY_URL can override this
-// for custom setups; otherwise /api/__clerk is the default route.
-const clerkProxyUrl: string = import.meta.env.VITE_CLERK_PROXY_URL ?? "/api/__clerk";
+// REQUIRED — copy verbatim. Empty in dev (Clerk hits dev FAPI directly), auto-set
+// in prod. Do NOT gate on import.meta.env.PROD / NODE_ENV, and do NOT hardcode a
+// fallback like "/api/__clerk" — the empty dev value is intentional, and any
+// fallback breaks dev by forcing requests through the (dev-only-disabled) proxy.
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
