@@ -253,7 +253,10 @@ export function ActionQueue() {
       {!collapsed && (
         <CardContent className="pt-4">
           {isError && (
-            <div className="flex items-start gap-3 mb-4 px-3 py-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400">
+            <div
+              className="flex items-start gap-3 mb-4 px-3 py-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400"
+              data-testid="action-queue-error-banner"
+            >
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium leading-snug">
@@ -274,6 +277,7 @@ export function ActionQueue() {
                 className="shrink-0 h-7 px-2 text-rose-400 hover:text-rose-300 hover:bg-rose-500/20"
                 onClick={(e) => { e.stopPropagation(); handleRetry(); }}
                 disabled={isRetrying}
+                data-testid="action-queue-retry"
               >
                 <RefreshCw className={cn("w-3.5 h-3.5 mr-1", isRetrying && "animate-spin")} />
                 {isRetrying ? "Retrying…" : "Retry"}
@@ -298,7 +302,7 @@ export function ActionQueue() {
               <p className="text-muted-foreground text-sm">No data available. Use Retry above to try again.</p>
             </div>
           ) : (
-            <div className={cn("space-y-3", hasStaleData && "opacity-60")}>
+            <div className={cn("space-y-3", hasStaleData && "opacity-60")} data-testid="action-queue-list">
               {actions.map((item) => (
                 <ActionCard
                   key={item.leadId}

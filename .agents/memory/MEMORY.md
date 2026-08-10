@@ -2,4 +2,5 @@
 - [Twilio lazy init](twilio-lazy-init.md) — Twilio client must be created lazily (inside function) not at module top-level; throws on invalid SID even with env check.
 - [Lead Scoring — outreach factor](lead-scoring-outreach-factor.md) — sequence messages only (sequenceStep IS NOT NULL), denominator = sent+failed (not pending), not all outbound messages
 - [Clerk migration](clerk-migration.md) — email bridge, JIT provisioning, Show vs SignedIn/SignedOut in v6, Tailwind v4 layer order, orval schemas conflict, dev FAPI testing limitation.
+- [E2E harness for auth-gated UI](e2e-clerk-harness.md) — dev-only `/__e2e/*` routes bypass the Clerk gate for Playwright; focus refetch needs `visibilitychange` dispatched on window.
 - [Drizzle migration baselining + config gotcha](drizzle-migration-baseline.md) — hash-baseline untracked dev schema into __drizzle_migrations; drizzle-kit 0.31.10 needs relative `out` path or re-`generate` crashes.

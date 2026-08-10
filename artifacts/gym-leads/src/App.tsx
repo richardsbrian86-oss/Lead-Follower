@@ -11,6 +11,7 @@ import LeadDetail from "@/pages/lead-detail";
 import Sequences from "@/pages/sequences";
 import Analytics from "@/pages/analytics";
 import Team from "@/pages/team";
+import { ActionQueue } from "@/components/action-queue";
 import { useKeepAlive } from "@/hooks/use-keep-alive";
 import {
   ClerkProvider,
@@ -537,6 +538,12 @@ function ClerkProviderWithRoutes() {
           <Route path="/sequences" component={() => <AuthedAppGuard><Sequences /></AuthedAppGuard>} />
           <Route path="/analytics" component={() => <AuthedAppGuard><Analytics /></AuthedAppGuard>} />
           <Route path="/team" component={() => <AuthedAppGuard><Team /></AuthedAppGuard>} />
+          {/* Dev-only test harness: renders ActionQueue outside the Clerk auth
+              gate so e2e tests can exercise its error/stale states by mocking
+              /api/dashboard/action-queue. Never included in production builds. */}
+          {import.meta.env.DEV && (
+            <Route path="/__e2e/action-queue" component={ActionQueueHarness} />
+          )}
           <Route component={NotFound} />
         </Switch>
       </QueryClientProvider>
@@ -544,8 +551,13 @@ function ClerkProviderWithRoutes() {
   );
 }
 
-// Guard used by deep links: checks sign-in AND gym assignment.
-// Users without a gym are redirected to / where GymSetupPage is shown.
+function ActionQueueHarness() {
+  return (
+    <div className="p-6 max-w-3xl mx-auto" data-testid="action-queue-harness">
+      <ActionQueue />
+    </div>
+  );
+}
 function AuthedAppGuard({ children }: { children: React.ReactNode }) {
   const { isLoaded, isSignedIn } = useAuth();
   const [, setLocation] = useLocation();
