@@ -334,17 +334,31 @@ function HomeRedirect() {
   const { isLoaded, isSignedIn } = useAuth();
   const qc = useQueryClient();
 
-  // When a signed-in user lands on /?verified=true (e.g. via back button after
-  // email verification), strip the query param so the verification banner is
-  // never shown to an already-authenticated user.  We use replaceState rather
-  // than wouter's setLocation because setLocation only controls the path
-  // segment and wouldn't remove the ?verified query string.
+  // Strip stale auth-flow query params so their UI is never shown to the
+  // wrong audience.  We use replaceState rather than wouter's setLocation
+  // because setLocation only controls the path segment and wouldn't remove
+  // the query string.
+  //
+  //  - ?verified=true — stripped for signed-in users only (e.g. back button
+  //    after email verification); signed-out users still see the banner.
+  //  - ?token=        — old password-reset links.  Clerk owns password reset
+  //    now, so this param is meaningless on "/" for ANY auth state; strip it
+  //    unconditionally so a signed-in user opening an old reset email lands
+  //    on the app root and never sees a "Set new password" form.
   useEffect(() => {
-    if (!isLoaded || !isSignedIn) return;
+    if (!isLoaded) return;
     const params = new URLSearchParams(window.location.search);
-    if (params.has("verified")) {
-      window.history.replaceState(null, "", window.location.pathname);
-    }
+    const stripToken = params.has("token");
+    const stripVerified = !!isSignedIn && params.has("verified");
+    if (!stripToken && !stripVerified) return;
+    if (stripToken) params.delete("token");
+    if (stripVerified) params.delete("verified");
+    const qs = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      window.location.pathname + (qs ? `?${qs}` : ""),
+    );
   }, [isLoaded, isSignedIn]);
 
   // Consume any pending invite token once on sign-in, then invalidate ["me"]
