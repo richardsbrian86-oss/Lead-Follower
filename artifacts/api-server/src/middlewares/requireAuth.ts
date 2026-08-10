@@ -20,9 +20,13 @@ declare global {
  * On first sign-in (no row found): JIT-provisions a new row. If there is a
  * pending invite for that email the user is assigned to that gym automatically.
  *
- * Dev bypass: when NODE_ENV !== "production" and no Clerk session is present,
- * falls back to the first user in the seeded gym so the app works without
- * signing in during local development.
+ * Dev bypass: OFF by default. Only activates when ALL of the following hold:
+ *   - DEV_AUTH_BYPASS is exactly "true" (explicit opt-in, not implied by dev env)
+ *   - NODE_ENV !== "production"
+ *   - REPLIT_DEPLOYMENT !== "1" (hard block in real deployments, regardless of
+ *     the other two — a misconfigured env var must never bypass auth in prod)
+ * Lets a developer see the seeded demo gym/leads locally without completing
+ * Clerk sign-in + onboarding.
  */
 export async function requireAuth(
   req: Request,
@@ -33,8 +37,12 @@ export async function requireAuth(
   const email = auth?.sessionClaims?.email as string | undefined;
 
   if (!email) {
-    // Dev bypass: auto-inject the first owner user when not in production
-    if (process.env.NODE_ENV !== "production") {
+    const devBypassEnabled =
+      process.env.DEV_AUTH_BYPASS === "true" &&
+      process.env.NODE_ENV !== "production" &&
+      process.env.REPLIT_DEPLOYMENT !== "1";
+
+    if (devBypassEnabled) {
       try {
         const [owner] = await db
           .select()
@@ -42,6 +50,10 @@ export async function requireAuth(
           .where(eq(usersTable.gymId, "00000000-0000-0000-0000-000000000001"))
           .limit(1);
         if (owner) {
+          console.warn(
+            "[requireAuth] DEV_AUTH_BYPASS active — injecting seeded owner user. " +
+              "Never set this in a deployed environment.",
+          );
           req.dbUser = { ...owner, role: "owner" };
           next();
           return;
@@ -81,7 +93,6 @@ export async function requireAuth(
         email,
         role: "staff",
         gymId: invite?.gymId ?? null,
-        emailVerified: true,
       })
       .onConflictDoNothing()
       .returning();

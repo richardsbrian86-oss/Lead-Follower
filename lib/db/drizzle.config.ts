@@ -7,7 +7,11 @@ if (!process.env.DATABASE_URL) {
 
 export default defineConfig({
   schema: path.join(__dirname, "./src/schema/index.ts"),
-  out: path.join(__dirname, "./migrations"),
+  // Must stay relative: drizzle-kit 0.31.10 concatenates "./" + this path when
+  // re-reading snapshot files on a second `generate` run. An absolute `out`
+  // produces a malformed "./<absolute path>" and crashes with ENOENT. Only
+  // works because our scripts always invoke drizzle-kit with cwd = lib/db.
+  out: "./migrations",
   dialect: "postgresql",
   dbCredentials: {
     url: process.env.DATABASE_URL,

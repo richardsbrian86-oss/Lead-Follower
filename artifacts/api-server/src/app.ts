@@ -52,7 +52,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Paths (relative to /api) that are exempt from the general rate limiter.
 function isExemptFromGeneralLimit(req: Request): boolean {
-  return req.path.startsWith("/auth/") || req.path === "/logout" || req.path === "/healthz";
+  return req.path.startsWith("/auth/") || req.path === "/healthz";
 }
 
 // General rate limit — 200 req / 15 min per IP
@@ -109,7 +109,7 @@ const chatLimiter = rateLimit({
 });
 
 app.use("/api", generalLimiter);
-app.use(["/api/auth/accept-invite", "/api/auth/resend-verification", "/api/gyms"], authLimiter);
+app.use("/api/gyms", authLimiter);
 app.use("/api/leads/:id/messages/draft", draftLimiter);
 app.use("/api/leads/:id/messages/send", sendLimiter);
 app.use("/api/analytics/insights", sendLimiter);

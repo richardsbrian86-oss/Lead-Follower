@@ -36,6 +36,20 @@
       "when": 1753315440000,
       "tag": "0004_sequence_templates_constraint_to_index",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786396268798,
+      "tag": "0005_baseline_pre_cleanup",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786396433871,
+      "tag": "0006_drop_dead_auth_columns_and_sessions",
+      "breakpoints": true
     }
   ]
 }

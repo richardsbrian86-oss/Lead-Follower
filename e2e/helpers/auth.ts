@@ -10,6 +10,11 @@
  *   - registerUnverifiedUser  → /api/auth/register is gone
  *   - setResetToken           → Clerk owns password reset
  *
+ * Removed with the sessions table + verify-email flow cleanup:
+ *   - insertUnverifiedUserWithToken → verify-email flow deleted; Clerk owns
+ *     email verification during sign-up
+ *   - session deletion queries      → sessions table no longer exists
+ *
  * Updated after Clerk migration:
  *   - registerAndVerifyUser   → now a pure DB insert (no API call)
  */
@@ -60,15 +65,14 @@ export async function registerAndVerifyUser(
     // Fetch gymId for the existing user if there's a conflict, otherwise use
     // the newly-created gym.  Tests always use unique UIDs so conflicts are rare.
     const { rows: userRows } = await pool.query(
-      `INSERT INTO users (email, name, first_name, last_name, role, gym_id, email_verified)
-       VALUES ($1, $2, $3, $4, 'owner', $5, true)
+      `INSERT INTO users (email, name, first_name, last_name, role, gym_id)
+       VALUES ($1, $2, $3, $4, 'owner', $5)
        ON CONFLICT (email) DO UPDATE
          SET name           = EXCLUDED.name,
              first_name     = EXCLUDED.first_name,
              last_name      = EXCLUDED.last_name,
              role           = EXCLUDED.role,
-             gym_id         = EXCLUDED.gym_id,
-             email_verified = true
+             gym_id         = EXCLUDED.gym_id
        RETURNING gym_id`,
       [email.toLowerCase().trim(), name, firstName, lastName, gymId],
     );
@@ -93,10 +97,6 @@ export async function deleteTestUserByEmail(email: string): Promise<void> {
     const gymId = rows[0]?.gym_id;
     const role = rows[0]?.role;
 
-    await pool.query(
-      "DELETE FROM sessions WHERE (sess->>'user')::jsonb->>'email' = $1",
-      [email.toLowerCase().trim()],
-    );
     await pool.query("DELETE FROM users WHERE email = $1", [
       email.toLowerCase().trim(),
     ]);
@@ -149,34 +149,7 @@ export async function createTestInvite(
 }
 
 /**
- * Insert (or reset) a user row with a pending verify token.
- * emailVerified is forced to false.  Useful for testing the verify-email flow
- * without going through the full registration API.
- */
-export async function insertUnverifiedUserWithToken(
-  email: string,
-  token: string,
-  expiresInMs: number = 24 * 60 * 60 * 1000,
-): Promise<void> {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  try {
-    const expiresAt = new Date(Date.now() + expiresInMs);
-    await pool.query(
-      `INSERT INTO users (email, email_verified, verify_token, verify_token_expiry, role)
-       VALUES ($1, false, $2, $3, 'staff')
-       ON CONFLICT (email) DO UPDATE
-         SET email_verified      = false,
-             verify_token        = $2,
-             verify_token_expiry = $3`,
-      [email.toLowerCase().trim(), token, expiresAt.toISOString()],
-    );
-  } finally {
-    await pool.end();
-  }
-}
-
-/**
- * Delete a gym and ALL associated data (invites, users, sessions) by owner email.
+ * Delete a gym and ALL associated data (invites, users) by owner email.
  * Use this for full invite-test cleanup.
  */
 export async function deleteGymAndAllUsers(ownerEmail: string): Promise<void> {
@@ -188,12 +161,6 @@ export async function deleteGymAndAllUsers(ownerEmail: string): Promise<void> {
     );
     const gymId = rows[0]?.gym_id;
     if (!gymId || gymId === DEFAULT_GYM_ID) return;
-
-    // Sessions for all users in this gym
-    await pool.query(
-      `DELETE FROM sessions WHERE (sess->'user'->>'gymId') = $1`,
-      [gymId],
-    );
 
     // Invites
     await pool.query("DELETE FROM invites WHERE gym_id = $1", [gymId]);

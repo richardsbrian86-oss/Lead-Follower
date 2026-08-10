@@ -8,67 +8,6 @@ function getResend(): Resend {
 
 const FROM = "Flow State CRM <noreply@resend.dev>";
 
-export async function sendVerificationEmail(
-  to: string,
-  name: string,
-  token: string,
-  appUrl: string,
-): Promise<void> {
-  const link = `${appUrl}/api/auth/verify-email?token=${token}`;
-  await getResend().emails.send({
-    from: FROM,
-    to,
-    subject: "Verify your Flow State account",
-    html: `
-      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
-        <h2 style="color:#0d1b2a;margin-bottom:8px">Welcome to Flow State, ${name}!</h2>
-        <p style="color:#555;margin-bottom:24px">
-          Click the button below to verify your email address and activate your account.
-          This link expires in 24 hours.
-        </p>
-        <a href="${link}"
-           style="display:inline-block;background:#00c8f0;color:#0d1b2a;font-weight:600;
-                  padding:14px 28px;border-radius:8px;text-decoration:none">
-          Verify Email
-        </a>
-        <p style="color:#999;font-size:12px;margin-top:24px">
-          If you didn't create an account, you can safely ignore this email.
-        </p>
-      </div>
-    `,
-  });
-}
-
-export async function sendPasswordResetEmail(
-  to: string,
-  token: string,
-  appUrl: string,
-): Promise<void> {
-  const link = `${appUrl}/reset-password?token=${token}`;
-  await getResend().emails.send({
-    from: FROM,
-    to,
-    subject: "Reset your Flow State password",
-    html: `
-      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
-        <h2 style="color:#0d1b2a;margin-bottom:8px">Reset your password</h2>
-        <p style="color:#555;margin-bottom:24px">
-          Click the button below to set a new password for your Flow State account.
-          This link expires in 1 hour.
-        </p>
-        <a href="${link}"
-           style="display:inline-block;background:#00c8f0;color:#0d1b2a;font-weight:600;
-                  padding:14px 28px;border-radius:8px;text-decoration:none">
-          Reset Password
-        </a>
-        <p style="color:#999;font-size:12px;margin-top:24px">
-          If you didn't request a password reset, you can safely ignore this email.
-        </p>
-      </div>
-    `,
-  });
-}
-
 export async function sendInviteAcceptedEmail(
   to: string,
   staffEmail: string,
