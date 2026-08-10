@@ -3,4 +3,5 @@
 - [Lead Scoring — outreach factor](lead-scoring-outreach-factor.md) — sequence messages only (sequenceStep IS NOT NULL), denominator = sent+failed (not pending), not all outbound messages
 - [Clerk migration](clerk-migration.md) — email bridge, JIT provisioning, Show vs SignedIn/SignedOut in v6, Tailwind v4 layer order, orval schemas conflict, dev FAPI testing limitation.
 - [E2E harness for auth-gated UI](e2e-clerk-harness.md) — dev-only `/__e2e/*` routes bypass the Clerk gate for Playwright; focus refetch needs `visibilitychange` dispatched on window.
+- [Clerk E2E sign-in](clerk-e2e-signin.md) — real Playwright Clerk sessions work via Backend-API sign-in tokens + ticket strategy; password UI sign-in is blocked by new-device verification.
 - [Drizzle migration baselining + config gotcha](drizzle-migration-baseline.md) — hash-baseline untracked dev schema into __drizzle_migrations; drizzle-kit 0.31.10 needs relative `out` path or re-`generate` crashes.
