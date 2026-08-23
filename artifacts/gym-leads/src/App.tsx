@@ -25,6 +25,7 @@ import {
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { dark } from "@clerk/themes";
 import { useEffect, useRef, useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -377,6 +378,7 @@ function AcceptInvitePage() {
 function AuthedApp() {
   return (
     <Layout>
+      <StaffJoinNotification />
       <Switch>
         <Route path="/" component={Dashboard} />
         <Route path="/leads" component={LeadsList} />
@@ -389,6 +391,36 @@ function AuthedApp() {
       </Switch>
     </Layout>
   );
+}
+
+function StaffJoinNotification() {
+  const { toast } = useToast();
+  const { data } = useQuery<{
+    notification: { memberEmail: string; gymName: string } | null;
+  }>({
+    queryKey: ["staff-join-notification"],
+    queryFn: () =>
+      fetch("/api/invites/staff-join-notifications/consume", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      }).then((res) => {
+        if (!res.ok) throw new Error("Unable to check team notifications");
+        return res.json();
+      }),
+    staleTime: Infinity,
+    retry: 1,
+  });
+
+  useEffect(() => {
+    if (!data?.notification) return;
+    toast({
+      title: "New team member",
+      description: `${data.notification.memberEmail} has joined ${data.notification.gymName}`,
+    });
+  }, [data, toast]);
+
+  return null;
 }
 
 // ─── Home redirect ────────────────────────────────────────────────────────────

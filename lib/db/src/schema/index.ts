@@ -7,3 +7,4 @@ export * from "./lead_sequences";
 export * from "./sequence_templates";
 export * from "./auth";
 export * from "./invites";
+export * from "./staff_join_notifications";

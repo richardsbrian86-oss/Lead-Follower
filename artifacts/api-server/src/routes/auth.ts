@@ -1,6 +1,12 @@
 import crypto from "crypto";
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { db, usersTable, gymsTable, invitesTable } from "@workspace/db";
+import {
+  db,
+  usersTable,
+  gymsTable,
+  invitesTable,
+  staffJoinNotificationsTable,
+} from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { sendInviteAcceptedEmail } from "../lib/email";
@@ -122,6 +128,26 @@ router.post(
         .update(invitesTable)
         .set({ acceptedAt: new Date() })
         .where(eq(invitesTable.id, invite.id));
+
+      const [owner] = await tx
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(and(eq(usersTable.gymId, invite.gymId), eq(usersTable.role, "owner")))
+        .limit(1);
+      const [gym] = await tx
+        .select({ name: gymsTable.name })
+        .from(gymsTable)
+        .where(eq(gymsTable.id, invite.gymId))
+        .limit(1);
+
+      if (owner && gym) {
+        await tx.insert(staffJoinNotificationsTable).values({
+          ownerUserId: owner.id,
+          gymId: invite.gymId,
+          memberEmail: user.email ?? invite.email,
+          gymName: gym.name,
+        });
+      }
     });
 
     // Notify the gym owner — fire-and-forget (don't block the response)

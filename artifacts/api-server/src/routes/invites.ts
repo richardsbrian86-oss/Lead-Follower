@@ -1,7 +1,13 @@
 import crypto from "crypto";
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { db, invitesTable, usersTable, gymsTable } from "@workspace/db";
-import { eq, and, isNull, gt } from "drizzle-orm";
+import {
+  db,
+  invitesTable,
+  usersTable,
+  gymsTable,
+  staffJoinNotificationsTable,
+} from "@workspace/db";
+import { eq, and, isNull, gt, asc } from "drizzle-orm";
 import { sendInviteEmail } from "../lib/email";
 
 const INVITE_TTL_MS = 48 * 60 * 60 * 1000;
@@ -10,6 +16,52 @@ function generateToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 const router: IRouter = Router();
+
+// POST /api/invites/staff-join-notifications/consume — atomically return the
+// oldest unseen join notification for the current owner and mark it as seen.
+router.post(
+  "/invites/staff-join-notifications/consume",
+  async (req: Request, res: Response) => {
+    const user = req.dbUser!;
+    if (user.role !== "owner" || !user.gymId) {
+      res.json({ notification: null });
+      return;
+    }
+
+    const notification = await db.transaction(async (tx) => {
+      const [unseen] = await tx
+        .select({
+          id: staffJoinNotificationsTable.id,
+          memberEmail: staffJoinNotificationsTable.memberEmail,
+          gymName: staffJoinNotificationsTable.gymName,
+        })
+        .from(staffJoinNotificationsTable)
+        .where(
+          and(
+            eq(staffJoinNotificationsTable.ownerUserId, user.id),
+            eq(staffJoinNotificationsTable.gymId, user.gymId!),
+            isNull(staffJoinNotificationsTable.seenAt),
+          ),
+        )
+        .orderBy(asc(staffJoinNotificationsTable.createdAt))
+        .limit(1);
+
+      if (!unseen) return null;
+
+      const [seen] = await tx
+        .update(staffJoinNotificationsTable)
+        .set({ seenAt: new Date() })
+        .where(eq(staffJoinNotificationsTable.id, unseen.id))
+        .returning({
+          memberEmail: staffJoinNotificationsTable.memberEmail,
+          gymName: staffJoinNotificationsTable.gymName,
+        });
+      return seen ?? null;
+    });
+
+    res.json({ notification });
+  },
+);
 
 function requireOwner(req: Request, res: Response, next: NextFunction) {
   if (req.dbUser?.role !== "owner") {
