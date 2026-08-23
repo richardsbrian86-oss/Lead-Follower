@@ -73,9 +73,10 @@ test.describe("Accept invite flow", () => {
 
     await expect(page.getByText("Invite link invalid")).toBeVisible();
     await expect(page.getByText(/Contact your gym owner/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Try again" })).not.toBeVisible();
   });
 
-  test("validation fetch rejection with an Error — shows invalid-invite card without a runtime error", async ({
+  test("temporary validation failure — offers retry and recovers without losing the invite", async ({
     page,
   }) => {
     const pageErrors: Error[] = [];
@@ -83,6 +84,7 @@ test.describe("Accept invite flow", () => {
 
     await page.addInitScript(() => {
       const originalFetch = window.fetch.bind(window);
+      let hasFailed = false;
       window.fetch = (input, init) => {
         const url =
           typeof input === "string"
@@ -91,7 +93,8 @@ test.describe("Accept invite flow", () => {
               ? input.toString()
               : input.url;
 
-        if (url.includes("/api/auth/invite/")) {
+        if (url.includes("/api/auth/invite/") && !hasFailed) {
+          hasFailed = true;
           return Promise.reject(new Error("Invite validation request failed"));
         }
 
@@ -106,6 +109,12 @@ test.describe("Accept invite flow", () => {
       page.getByText("Invite validation request failed"),
     ).toBeVisible();
     await expect(page.getByText(/Contact your gym owner/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+    await page.getByRole("button", { name: "Try again" }).click();
+    await expect(
+      page.getByRole("heading", { name: /Invite Test Gym/i }),
+    ).toBeVisible();
+    await expect(page.getByText(staffEmail)).toBeVisible();
     await expect(page.locator("vite-error-overlay")).not.toBeAttached();
     expect(pageErrors).toEqual([]);
   });

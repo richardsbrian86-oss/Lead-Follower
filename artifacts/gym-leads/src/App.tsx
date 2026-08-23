@@ -223,22 +223,65 @@ function AcceptInvitePage() {
   const [info, setInfo] = useState<{ email: string; gymName: string } | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [retryable, setRetryable] = useState(false);
+  const [retryAttempt, setRetryAttempt] = useState(0);
 
   useEffect(() => {
-    if (!token) { setError("Invalid invite link."); setLoading(false); return; }
-    fetch(`/api/auth/invite/${token}`, { credentials: "include" })
-      .then((r) => r.ok ? r.json() : r.json().then((d: { error?: string }) => Promise.reject(d.error ?? "Invalid")))
-      .then((d: { email: string; gymName: string }) => { setInfo(d); setLoading(false); })
-      .catch((err: unknown) => {
+    let cancelled = false;
+
+    async function validateInvite() {
+      if (!token) {
+        setError("Invalid invite link.");
+        setRetryable(false);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError("");
+      setRetryable(false);
+
+      try {
+        const response = await fetch(`/api/auth/invite/${token}`, { credentials: "include" });
+        if (!response.ok) {
+          let message = "This invite link is invalid or has expired.";
+          try {
+            const data = await response.json() as { error?: string };
+            message = data.error ?? message;
+          } catch {
+            // Keep the standard guidance when an error response has no JSON body.
+          }
+          const validationError = new Error(message) as Error & { retryable: boolean };
+          validationError.retryable = response.status >= 500;
+          throw validationError;
+        }
+
+        const data = await response.json() as { email: string; gymName: string };
+        if (!cancelled) {
+          setInfo(data);
+          setError("");
+          setRetryable(false);
+        }
+      } catch (err: unknown) {
+        if (cancelled) return;
         const message = err instanceof Error
           ? err.message
           : typeof err === "string"
             ? err
             : "";
+        const isRetryable = !(err instanceof Error && "retryable" in err)
+          || (err as Error & { retryable: boolean }).retryable;
+        setInfo(null);
         setError(message || "This invite link is invalid or has expired.");
-        setLoading(false);
-      });
-  }, [token]);
+        setRetryable(isRetryable);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void validateInvite();
+    return () => { cancelled = true; };
+  }, [retryAttempt, token]);
 
   if (loading) {
     return (
@@ -258,6 +301,15 @@ function AcceptInvitePage() {
             <p className="text-sm text-muted-foreground mt-1">{error || "This invite link has expired."}</p>
             <p className="text-sm text-muted-foreground mt-1">Contact your gym owner for a new invite.</p>
           </div>
+           {retryable && (
+             <button
+               type="button"
+               onClick={() => setRetryAttempt((attempt) => attempt + 1)}
+               className="w-full py-2.5 rounded-lg border border-primary text-primary hover:bg-primary/10 font-semibold text-sm"
+             >
+               Try again
+             </button>
+           )}
           <button type="button" onClick={() => setLocation("/")} className="text-primary hover:underline text-sm">
             ← Back to home
           </button>
