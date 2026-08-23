@@ -19,6 +19,10 @@
  *   - Owner removing a staff member
  * These flows are covered by manual smoke-testing or a future Clerk-capable
  * E2E mechanism (see follow-up task #76).
+ *
+ * The owner notification sent after successful consumption is covered by the
+ * manual script in invite-owner-notification.manual.md. It verifies the
+ * Resend recipient and gym name, plus no-owner and send-failure behavior.
  */
 
 import { test, expect } from "@playwright/test";
