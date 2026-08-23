@@ -14,9 +14,27 @@
       "backgroundColor": "#0d1b2a"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.flowstatecrm.mobile",
+      "associatedDomains": ["applinks:lead-follower-richardsbrian86.replit.app"]
     },
-    "android": {},
+    "android": {
+      "package": "com.flowstatecrm.mobile",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "lead-follower-richardsbrian86.replit.app",
+              "pathPrefix": "/accept-invite"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },

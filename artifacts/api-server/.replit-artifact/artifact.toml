@@ -27,6 +27,13 @@ args = ["node", "--enable-source-maps", "artifacts/api-server/dist/index.mjs"]
 [services.production.run.env]
 PORT = "8080"
 NODE_ENV = "production"
+# Pinned canonical production domain — used by getAppUrl() (src/routes/invites.ts)
+# to build the invite email link, so it always matches the domain hosted in
+# gym-leads' public/.well-known/ files and configured in the mobile app's
+# app.json (associatedDomains / intentFilters) for universal/app links.
+# If a custom domain is added later, update this AND app.json AND the
+# .well-known files together, or the invite link will stop opening the app.
+APP_URL = "https://lead-follower-richardsbrian86.replit.app"
 
 [services.production.health.startup]
 path = "/api/healthz"

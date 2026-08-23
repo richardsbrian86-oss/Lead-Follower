@@ -19,7 +19,19 @@ function requireOwner(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+// In production, prefer a pinned canonical domain (set via the APP_URL env
+// var, see artifacts/api-server/.replit-artifact/artifact.toml) over the
+// per-request Host header. This guarantees the emailed link's domain always
+// matches the domain registered in the mobile app's associatedDomains /
+// intentFilters (app.json) and hosted in gym-leads' public/.well-known/
+// verification files — a mismatch there silently breaks the universal/app
+// link (the https link would still work, it just wouldn't open the app).
+// Falls back to dynamic per-request detection for local dev / preview,
+// where there's no fixed domain to pin to.
 function getAppUrl(req: Request): string {
+  if (process.env.APP_URL) {
+    return process.env.APP_URL.replace(/\/$/, "");
+  }
   const proto = req.headers["x-forwarded-proto"] || "https";
   const host =
     req.headers["x-forwarded-host"] || req.headers["host"] || "localhost";

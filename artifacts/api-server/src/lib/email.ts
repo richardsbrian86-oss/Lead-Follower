@@ -39,7 +39,12 @@ export async function sendInviteEmail(
   token: string,
   appUrl: string,
 ): Promise<void> {
-  const link = `${appUrl}/?invite=${token}`;
+  // Must be an actual route the web app handles (AcceptInvitePage lives at
+  // /accept-invite and reads ?token=), and must exactly match the path
+  // registered in the mobile app's associatedDomains/intentFilters
+  // (see app.json) so the universal/app link fires. Falls back to this
+  // web page automatically when the native app isn't installed.
+  const link = `${appUrl}/accept-invite?token=${token}`;
   await getResend().emails.send({
     from: FROM,
     to,
