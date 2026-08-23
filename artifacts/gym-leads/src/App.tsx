@@ -605,6 +605,12 @@ function ClerkProviderWithRoutes() {
           {import.meta.env.DEV && (
             <Route path="/__e2e/action-queue" component={ActionQueueHarness} />
           )}
+          {/* Dev-only test harness: renders Dashboard outside the Clerk auth
+              gate so e2e tests can exercise its error state by mocking
+              /api/dashboard/summary. Never included in production builds. */}
+          {import.meta.env.DEV && (
+            <Route path="/__e2e/dashboard" component={DashboardHarness} />
+          )}
           <Route component={NotFound} />
         </Switch>
       </QueryClientProvider>
@@ -616,6 +622,14 @@ function ActionQueueHarness() {
   return (
     <div className="p-6 max-w-3xl mx-auto" data-testid="action-queue-harness">
       <ActionQueue />
+    </div>
+  );
+}
+
+function DashboardHarness() {
+  return (
+    <div className="p-6" data-testid="dashboard-harness">
+      <Dashboard />
     </div>
   );
 }

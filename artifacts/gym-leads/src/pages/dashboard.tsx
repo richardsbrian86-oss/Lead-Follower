@@ -39,7 +39,10 @@ export default function Dashboard() {
 
   if (isError || !summary) {
     return (
-      <div className="p-8 text-center bg-destructive/10 rounded-lg text-destructive">
+      <div
+        className="p-8 text-center bg-destructive/10 rounded-lg text-destructive"
+        data-testid="dashboard-error-banner"
+      >
         <h2 className="text-xl font-bold mb-2">Error loading dashboard</h2>
         <p>Could not fetch the latest pipeline data.</p>
       </div>
