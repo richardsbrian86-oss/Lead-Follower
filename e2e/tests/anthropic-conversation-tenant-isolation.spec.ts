@@ -70,6 +70,8 @@ test.describe("AI conversation tenant isolation", () => {
   let noGymContext: import("@playwright/test").BrowserContext;
   let conversationBId: number;
   let foreignMessageId: number;
+  let legacyConversationId: number;
+  let legacyMessageId: number;
   let gymAId: string;
   let gymBId: string;
 
@@ -107,6 +109,22 @@ test.describe("AI conversation tenant isolation", () => {
         [gymBId, conversationBId, "Tenant B private message"],
       );
       foreignMessageId = message.rows[0].id;
+
+      const legacyConversation = await pool.query<{ id: number }>(
+        `INSERT INTO conversations (gym_id, title)
+         VALUES (NULL, $1)
+         RETURNING id`,
+        ["Legacy unscoped conversation"],
+      );
+      legacyConversationId = legacyConversation.rows[0].id;
+
+      const legacyMessage = await pool.query<{ id: number }>(
+        `INSERT INTO messages (gym_id, conversation_id, role, content)
+         VALUES (NULL, $1, 'assistant', $2)
+         RETURNING id`,
+        [legacyConversationId, "Legacy private message"],
+      );
+      legacyMessageId = legacyMessage.rows[0].id;
     } finally {
       await pool.end();
     }
@@ -120,6 +138,9 @@ test.describe("AI conversation tenant isolation", () => {
     try {
       if (conversationBId) {
         await pool.query("DELETE FROM conversations WHERE id = $1", [conversationBId]);
+      }
+      if (legacyConversationId) {
+        await pool.query("DELETE FROM conversations WHERE id = $1", [legacyConversationId]);
       }
       if (gymAId) {
         await pool.query("DELETE FROM conversations WHERE gym_id = $1", [gymAId]);
@@ -188,6 +209,60 @@ test.describe("AI conversation tenant isolation", () => {
       expect(conversation.rows).toEqual([{ id: conversationBId, gym_id: gymBId }]);
       expect(message.rows).toEqual([
         { id: foreignMessageId, gym_id: gymBId, content: "Tenant B private message" },
+      ]);
+    } finally {
+      await pool.end();
+    }
+  });
+
+  test("keeps legacy conversations without gym ownership inaccessible", async () => {
+    const page = await contextA.newPage();
+    await page.goto("/");
+
+    const listResult = await api(page, "GET", "/api/anthropic/conversations");
+    expect(listResult.status).toBe(200);
+    expect(listResult.body).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: legacyConversationId })]),
+    );
+
+    const path = `/api/anthropic/conversations/${legacyConversationId}`;
+    const getResult = await api(page, "GET", path);
+    expect(getResult.status).toBe(404);
+
+    const deleteResult = await api(page, "DELETE", path);
+    expect(deleteResult.status).toBe(404);
+
+    const messagesResult = await api(page, "GET", `${path}/messages`);
+    expect(messagesResult.status).toBe(404);
+
+    const postResult = await api(page, "POST", `${path}/messages`, {
+      content: "This must not be added to a legacy conversation",
+    });
+    expect(postResult.status).toBe(404);
+    await page.close();
+
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    try {
+      const conversation = await pool.query(
+        "SELECT id, gym_id, title FROM conversations WHERE id = $1",
+        [legacyConversationId],
+      );
+      const messages = await pool.query(
+        "SELECT id, gym_id, conversation_id, role, content FROM messages WHERE conversation_id = $1",
+        [legacyConversationId],
+      );
+
+      expect(conversation.rows).toEqual([
+        { id: legacyConversationId, gym_id: null, title: "Legacy unscoped conversation" },
+      ]);
+      expect(messages.rows).toEqual([
+        {
+          id: legacyMessageId,
+          gym_id: null,
+          conversation_id: legacyConversationId,
+          role: "assistant",
+          content: "Legacy private message",
+        },
       ]);
     } finally {
       await pool.end();
