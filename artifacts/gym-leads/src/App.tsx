@@ -229,7 +229,15 @@ function AcceptInvitePage() {
     fetch(`/api/auth/invite/${token}`, { credentials: "include" })
       .then((r) => r.ok ? r.json() : r.json().then((d: { error?: string }) => Promise.reject(d.error ?? "Invalid")))
       .then((d: { email: string; gymName: string }) => { setInfo(d); setLoading(false); })
-      .catch((err: string) => { setError(err || "This invite link is invalid or has expired."); setLoading(false); });
+      .catch((err: unknown) => {
+        const message = err instanceof Error
+          ? err.message
+          : typeof err === "string"
+            ? err
+            : "";
+        setError(message || "This invite link is invalid or has expired.");
+        setLoading(false);
+      });
   }, [token]);
 
   if (loading) {
