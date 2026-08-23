@@ -118,5 +118,28 @@ export function useDismissedLeads() {
     });
   }, []);
 
-  return { dismissed, dismiss };
+  const undoDismiss = useCallback((leadId: number) => {
+    setDismissed((prev) => {
+      const today = getTodayKey();
+
+      // If the calendar has rolled past midnight, yesterday's set is already
+      // invalid. Clear it instead of writing an empty set under today's key.
+      if (activeDateKey.current !== today) {
+        activeDateKey.current = today;
+        clearStorage();
+        return new Set<number>();
+      }
+
+      const next = new Set(prev);
+      next.delete(leadId);
+      if (next.size === 0) {
+        clearStorage();
+      } else {
+        writeStorage(next);
+      }
+      return next;
+    });
+  }, []);
+
+  return { dismissed, dismiss, undoDismiss };
 }

@@ -43,6 +43,10 @@ interface ActionCardProps {
   onDismiss: (leadId: number) => void;
 }
 
+interface DismissedActionCardProps {
+  item: ActionItem;
+  onUndo: (leadId: number) => void;
+}
 function ActionCard({ item, onMarkContacted, isMarkingContacted, onDismiss }: ActionCardProps) {
   const [msgOpen, setMsgOpen] = useState(false);
   const { border, pill } = reasonColor(item.primaryReason);
@@ -142,13 +146,14 @@ function ActionCard({ item, onMarkContacted, isMarkingContacted, onDismiss }: Ac
 
 export function ActionQueue() {
   const [collapsed, setCollapsed] = useState(false);
+  const [showDismissed, setShowDismissed] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [markingIds, setMarkingIds] = useState<Set<number>>(new Set());
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const updateLead = useUpdateLead();
   const createEvent = useCreateLeadEvent();
-  const { dismissed, dismiss } = useDismissedLeads();
+  const { dismissed, dismiss, undoDismiss } = useDismissedLeads();
 
   const { data, isLoading, isError, dataUpdatedAt, refetch } = useGetDashboardActionQueue(undefined, {
     query: {
@@ -159,6 +164,7 @@ export function ActionQueue() {
 
   const allActions = data?.actions ?? [];
   const actions = allActions.filter((a) => !dismissed.has(a.leadId));
+  const dismissedActions = allActions.filter((a) => dismissed.has(a.leadId));
   const count = actions.length;
   const hasStaleData = isError && data !== undefined;
 
@@ -220,6 +226,32 @@ export function ActionQueue() {
       );
     }
   };
+
+  const dismissedSection = dismissed.size > 0 && (
+    <div className="mt-5 pt-4 border-t border-border/50" data-testid="dismissed-actions">
+      <button
+        type="button"
+        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+        onClick={() => setShowDismissed((show) => !show)}
+        aria-expanded={showDismissed}
+      >
+        {showDismissed ? "Hide dismissed" : "Show dismissed"} ({dismissed.size})
+      </button>
+      {showDismissed && (
+        <div className="space-y-3 mt-3">
+          {dismissedActions.length > 0 ? (
+            dismissedActions.map((item) => (
+              <DismissedActionCard key={item.leadId} item={item} onUndo={undoDismiss} />
+            ))
+          ) : (
+            <p className="text-xs text-muted-foreground py-2">
+              Dismissed leads are no longer in today&apos;s action queue.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <Card className="border-none shadow-md">
@@ -292,30 +324,73 @@ export function ActionQueue() {
               ))}
             </div>
           ) : !isError && count === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <span className="text-3xl mb-2">🎯</span>
-              <p className="text-muted-foreground font-medium">All caught up for today</p>
-              <p className="text-xs text-muted-foreground mt-1">No urgent actions right now — check back later.</p>
-            </div>
+            <>
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <span className="text-3xl mb-2">🎯</span>
+                <p className="text-muted-foreground font-medium">All caught up for today</p>
+                <p className="text-xs text-muted-foreground mt-1">No urgent actions right now — check back later.</p>
+              </div>
+              {dismissedSection}
+            </>
           ) : isError && !hasStaleData ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <p className="text-muted-foreground text-sm">No data available. Use Retry above to try again.</p>
             </div>
           ) : (
-            <div className={cn("space-y-3", hasStaleData && "opacity-60")} data-testid="action-queue-list">
-              {actions.map((item) => (
-                <ActionCard
-                  key={item.leadId}
-                  item={item}
-                  onMarkContacted={handleMarkContacted}
-                  isMarkingContacted={markingIds.has(item.leadId)}
-                  onDismiss={dismiss}
-                />
-              ))}
-            </div>
+            <>
+              <div className={cn("space-y-3", hasStaleData && "opacity-60")} data-testid="action-queue-list">
+                {actions.map((item) => (
+                  <ActionCard
+                    key={item.leadId}
+                    item={item}
+                    onMarkContacted={handleMarkContacted}
+                    isMarkingContacted={markingIds.has(item.leadId)}
+                    onDismiss={dismiss}
+                  />
+                ))}
+              </div>
+              {dismissedSection}
+            </>
           )}
         </CardContent>
       )}
     </Card>
+  );
+}
+
+function DismissedActionCard({ item, onUndo }: DismissedActionCardProps) {
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-lg bg-muted/20 border border-border/50 opacity-70">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="shrink-0 grayscale">
+          <ScoreBadge score={item.score} size="md" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <span className="font-semibold text-sm truncate">{item.name}</span>
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-muted text-muted-foreground">
+              Dismissed
+            </span>
+            <StatusBadge status={item.status} />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">{item.primaryReason}</span>
+            {item.daysSinceContact !== null && item.daysSinceContact !== undefined && (
+              <span className="text-xs text-muted-foreground">
+                {item.daysSinceContact === 0 ? "Contacted today" : `${item.daysSinceContact}d since contact`}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        className="shrink-0 self-end sm:self-auto"
+        onClick={() => onUndo(item.leadId)}
+      >
+        Undo
+      </Button>
+    </div>
   );
 }
