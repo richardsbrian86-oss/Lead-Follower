@@ -248,6 +248,7 @@ function AcceptInvitePage() {
           <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20">
             <p className="font-semibold text-destructive">Invite link invalid</p>
             <p className="text-sm text-muted-foreground mt-1">{error || "This invite link has expired."}</p>
+            <p className="text-sm text-muted-foreground mt-1">Contact your gym owner for a new invite.</p>
           </div>
           <button type="button" onClick={() => setLocation("/")} className="text-primary hover:underline text-sm">
             ← Back to home
