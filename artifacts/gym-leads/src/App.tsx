@@ -627,6 +627,13 @@ function ClerkProviderWithRoutes() {
           {/* App routes — only reachable if HomeRedirect already passed gym check */}
           <Route path="/leads" component={() => <AuthedAppGuard><LeadsList /></AuthedAppGuard>} />
           <Route path="/leads/new" component={() => <AuthedAppGuard><LeadNew /></AuthedAppGuard>} />
+          {/* Dev-only route: preserves the real /leads/:id navigation target
+              while allowing e2e tests to exercise lead-detail behavior without
+              establishing a Clerk browser session. This must precede the
+              authenticated route below. */}
+          {import.meta.env.DEV && (
+            <Route path="/leads/:id" component={LeadDetail} />
+          )}
           <Route path="/leads/:id" component={() => <AuthedAppGuard><LeadDetail /></AuthedAppGuard>} />
           <Route path="/sequences" component={() => <AuthedAppGuard><Sequences /></AuthedAppGuard>} />
           <Route path="/analytics" component={() => <AuthedAppGuard><Analytics /></AuthedAppGuard>} />

@@ -55,8 +55,8 @@ async function clearDismissedLeads(page: Page): Promise<void> {
   // runs (or other tests) can't hide our fixture leads.
   await page.addInitScript(() => {
     try {
-      for (const key of Object.keys(localStorage)) {
-        if (key.toLowerCase().includes("dismiss")) localStorage.removeItem(key);
+      for (const key of Object.keys(sessionStorage)) {
+        if (key.toLowerCase().includes("dismiss")) sessionStorage.removeItem(key);
       }
     } catch {
       /* ignore */
