@@ -74,4 +74,39 @@ test.describe("Accept invite flow", () => {
     await expect(page.getByText("Invite link invalid")).toBeVisible();
     await expect(page.getByText(/Contact your gym owner/i)).toBeVisible();
   });
+
+  test("validation fetch rejection with an Error — shows invalid-invite card without a runtime error", async ({
+    page,
+  }) => {
+    const pageErrors: Error[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error));
+
+    await page.addInitScript(() => {
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (input, init) => {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+
+        if (url.includes("/api/auth/invite/")) {
+          return Promise.reject(new Error("Invite validation request failed"));
+        }
+
+        return originalFetch(input, init);
+      };
+    });
+
+    await page.goto(`/accept-invite?token=${inviteToken}`);
+
+    await expect(page.getByText("Invite link invalid")).toBeVisible();
+    await expect(
+      page.getByText("Invite validation request failed"),
+    ).toBeVisible();
+    await expect(page.getByText(/Contact your gym owner/i)).toBeVisible();
+    await expect(page.locator("vite-error-overlay")).not.toBeAttached();
+    expect(pageErrors).toEqual([]);
+  });
 });
