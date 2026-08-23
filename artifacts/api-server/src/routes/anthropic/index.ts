@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import { db, conversations as conversationsTable, messages as messagesTable } from "@workspace/db";
 import {
   CreateAnthropicConversationBody,
@@ -13,11 +13,22 @@ import { logger } from "../../lib/logger.js";
 
 const router: IRouter = Router();
 
-router.get("/anthropic/conversations", async (_req, res): Promise<void> => {
+// AI conversations are gym-scoped. Users who have not completed gym setup
+// cannot access this feature because there is no tenant to scope it to.
+router.use((req, res, next): void => {
+  if (!req.dbUser?.gymId) {
+    res.status(403).json({ error: "A gym is required to use AI conversations" });
+    return;
+  }
+  next();
+});
+
+router.get("/anthropic/conversations", async (req, res): Promise<void> => {
   try {
     const conversations = await db
       .select()
       .from(conversationsTable)
+      .where(eq(conversationsTable.gymId, req.dbUser!.gymId!))
       .orderBy(desc(conversationsTable.createdAt));
     res.json(
       conversations.map((c) => ({
@@ -40,7 +51,7 @@ router.post("/anthropic/conversations", async (req, res): Promise<void> => {
   try {
     const [conv] = await db
       .insert(conversationsTable)
-      .values({ title: parsed.data.title })
+      .values({ title: parsed.data.title, gymId: req.dbUser!.gymId! })
       .returning();
     res.status(201).json({
       ...conv,
@@ -62,7 +73,12 @@ router.get("/anthropic/conversations/:id", async (req, res): Promise<void> => {
     const [conv] = await db
       .select()
       .from(conversationsTable)
-      .where(eq(conversationsTable.id, params.data.id));
+      .where(
+        and(
+          eq(conversationsTable.id, params.data.id),
+          eq(conversationsTable.gymId, req.dbUser!.gymId!),
+        ),
+      );
     if (!conv) {
       res.status(404).json({ error: "Conversation not found" });
       return;
@@ -70,7 +86,12 @@ router.get("/anthropic/conversations/:id", async (req, res): Promise<void> => {
     const msgs = await db
       .select()
       .from(messagesTable)
-      .where(eq(messagesTable.conversationId, conv.id))
+      .where(
+        and(
+          eq(messagesTable.conversationId, conv.id),
+          eq(messagesTable.gymId, req.dbUser!.gymId!),
+        ),
+      )
       .orderBy(messagesTable.createdAt);
 
     const serialize = (d: Date | string) => (d instanceof Date ? d.toISOString() : d);
@@ -94,7 +115,12 @@ router.delete("/anthropic/conversations/:id", async (req, res): Promise<void> =>
   try {
     const [deleted] = await db
       .delete(conversationsTable)
-      .where(eq(conversationsTable.id, params.data.id))
+      .where(
+        and(
+          eq(conversationsTable.id, params.data.id),
+          eq(conversationsTable.gymId, req.dbUser!.gymId!),
+        ),
+      )
       .returning();
     if (!deleted) {
       res.status(404).json({ error: "Conversation not found" });
@@ -114,10 +140,28 @@ router.get("/anthropic/conversations/:id/messages", async (req, res): Promise<vo
     return;
   }
   try {
+    const [conversation] = await db
+      .select()
+      .from(conversationsTable)
+      .where(
+        and(
+          eq(conversationsTable.id, params.data.id),
+          eq(conversationsTable.gymId, req.dbUser!.gymId!),
+        ),
+      );
+    if (!conversation) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
     const msgs = await db
       .select()
       .from(messagesTable)
-      .where(eq(messagesTable.conversationId, params.data.id))
+      .where(
+        and(
+          eq(messagesTable.conversationId, conversation.id),
+          eq(messagesTable.gymId, req.dbUser!.gymId!),
+        ),
+      )
       .orderBy(messagesTable.createdAt);
     res.json(
       msgs.map((m) => ({
@@ -146,13 +190,19 @@ router.post("/anthropic/conversations/:id/messages", async (req, res): Promise<v
   const [conv] = await db
     .select()
     .from(conversationsTable)
-    .where(eq(conversationsTable.id, params.data.id));
+    .where(
+      and(
+        eq(conversationsTable.id, params.data.id),
+        eq(conversationsTable.gymId, req.dbUser!.gymId!),
+      ),
+    );
   if (!conv) {
     res.status(404).json({ error: "Conversation not found" });
     return;
   }
 
   await db.insert(messagesTable).values({
+    gymId: req.dbUser!.gymId!,
     conversationId: conv.id,
     role: "user",
     content: parsed.data.content,
@@ -161,7 +211,12 @@ router.post("/anthropic/conversations/:id/messages", async (req, res): Promise<v
   const history = await db
     .select()
     .from(messagesTable)
-    .where(eq(messagesTable.conversationId, conv.id))
+    .where(
+      and(
+        eq(messagesTable.conversationId, conv.id),
+        eq(messagesTable.gymId, req.dbUser!.gymId!),
+      ),
+    )
     .orderBy(messagesTable.createdAt);
 
   const chatMessages = history.map((m) => ({
@@ -193,6 +248,7 @@ router.post("/anthropic/conversations/:id/messages", async (req, res): Promise<v
     }
 
     await db.insert(messagesTable).values({
+      gymId: req.dbUser!.gymId!,
       conversationId: conv.id,
       role: "assistant",
       content: fullResponse,
