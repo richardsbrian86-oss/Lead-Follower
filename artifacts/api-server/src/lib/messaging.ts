@@ -41,7 +41,7 @@ export async function sendEmail(opts: {
       .update(outboundMessagesTable)
       .set({ status: "failed", errorMessage: "RESEND_API_KEY not configured" })
       .where(eq(outboundMessagesTable.id, messageId));
-    return;
+    throw new Error("RESEND_API_KEY not configured");
   }
 
   try {
@@ -62,6 +62,7 @@ export async function sendEmail(opts: {
       .update(outboundMessagesTable)
       .set({ status: "failed", errorMessage })
       .where(eq(outboundMessagesTable.id, messageId));
+    throw new Error(errorMessage);
   }
 }
 
@@ -79,7 +80,7 @@ export async function sendSms(opts: {
       .update(outboundMessagesTable)
       .set({ status: "failed", errorMessage: "Twilio credentials not configured" })
       .where(eq(outboundMessagesTable.id, messageId));
-    return;
+    throw new Error("Twilio credentials not configured");
   }
 
   try {
@@ -99,5 +100,6 @@ export async function sendSms(opts: {
       .update(outboundMessagesTable)
       .set({ status: "failed", errorMessage })
       .where(eq(outboundMessagesTable.id, messageId));
+    throw new Error(errorMessage);
   }
 }

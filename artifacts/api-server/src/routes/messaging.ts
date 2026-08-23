@@ -125,19 +125,29 @@ router.post("/leads/:id/messages/send", async (req, res): Promise<void> => {
     })
     .returning();
 
-  if (body.data.channel === "email") {
-    await sendEmail({
-      messageId: msg.id,
-      toEmail: lead.email,
-      subject: body.data.subject ?? "Following up from Flow State",
-      body: body.data.body,
-    });
-  } else {
-    await sendSms({
-      messageId: msg.id,
-      toPhone: lead.phone,
-      body: body.data.body,
-    });
+  try {
+    if (body.data.channel === "email") {
+      await sendEmail({
+        messageId: msg.id,
+        toEmail: lead.email,
+        subject: body.data.subject ?? "Following up from Flow State",
+        body: body.data.body,
+      });
+    } else {
+      await sendSms({
+        messageId: msg.id,
+        toPhone: lead.phone,
+        body: body.data.body,
+      });
+    }
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    await db
+      .update(outboundMessagesTable)
+      .set({ status: "failed", errorMessage })
+      .where(eq(outboundMessagesTable.id, msg.id));
+    res.status(502).json({ error: `Message delivery failed: ${errorMessage}` });
+    return;
   }
 
   const [updated] = await db

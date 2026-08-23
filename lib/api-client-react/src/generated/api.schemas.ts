@@ -171,12 +171,24 @@ export interface SendMessageInput {
   sequenceStep?: number | null;
 }
 
+export type LeadSequenceStatus = typeof LeadSequenceStatus[keyof typeof LeadSequenceStatus];
+
+
+export const LeadSequenceStatus = {
+  active: 'active',
+  processing: 'processing',
+  failed: 'failed',
+} as const;
+
 export interface LeadSequence {
   id: number;
   leadId: number;
   currentStep: number;
   paused: boolean;
   cancelled: boolean;
+  status?: LeadSequenceStatus;
+  failureReason?: string | null;
+  claimedAt?: string | null;
   nextSendAt?: string | null;
   createdAt: string;
   updatedAt: string;

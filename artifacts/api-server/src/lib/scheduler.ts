@@ -1,12 +1,13 @@
 import cron from "node-cron";
 import { db, leadSequencesTable, sequenceTemplatesTable, leadsTable, outboundMessagesTable } from "@workspace/db";
-import { eq, and, lte, isNotNull, notInArray } from "drizzle-orm";
+import { eq, and, lte, lt, isNotNull, notInArray } from "drizzle-orm";
 import { generateMessage } from "./ai-generator.js";
 import { sendEmail, sendSms } from "./messaging.js";
 import { recomputeAllActiveScores } from "./scorer.js";
 import { logger } from "./logger.js";
 
 const MAX_STEPS = 4;
+const CLAIM_TIMEOUT_MS = 30 * 60 * 1000;
 
 export function startScheduler(): void {
   // Run every hour at the top of the hour
@@ -27,6 +28,26 @@ export function startScheduler(): void {
 async function processSequences(): Promise<void> {
   const now = new Date();
 
+  // A process that died while holding a claim cannot safely be retried: the
+  // provider may have accepted the message before the process died. Mark it
+  // failed so an owner can investigate without risking a duplicate send.
+  const staleClaimedAt = new Date(now.getTime() - CLAIM_TIMEOUT_MS);
+  await db
+    .update(leadSequencesTable)
+    .set({
+      status: "failed",
+      failureReason: "Scheduler stopped while sending; no automatic retry was attempted.",
+      claimedAt: null,
+      nextSendAt: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(leadSequencesTable.status, "processing"),
+        lt(leadSequencesTable.claimedAt, staleClaimedAt),
+      ),
+    );
+
   const dueSequences = await db
     .select({
       seq: leadSequencesTable,
@@ -38,6 +59,7 @@ async function processSequences(): Promise<void> {
       and(
         eq(leadSequencesTable.paused, false),
         eq(leadSequencesTable.cancelled, false),
+        eq(leadSequencesTable.status, "active"),
         isNotNull(leadSequencesTable.nextSendAt),
         lte(leadSequencesTable.nextSendAt, now),
         notInArray(leadsTable.status, ["won", "lost"]),
@@ -47,10 +69,29 @@ async function processSequences(): Promise<void> {
   logger.info({ count: dueSequences.length }, "Due sequences found");
 
   for (const { seq, lead } of dueSequences) {
+    // Claim atomically so overlapping ticks or multiple server instances
+    // cannot both send this lead's current step.
+    const [claimed] = await db
+      .update(leadSequencesTable)
+      .set({ status: "processing", claimedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(leadSequencesTable.id, seq.id),
+          eq(leadSequencesTable.status, "active"),
+          eq(leadSequencesTable.paused, false),
+          eq(leadSequencesTable.cancelled, false),
+          isNotNull(leadSequencesTable.nextSendAt),
+          lte(leadSequencesTable.nextSendAt, now),
+        ),
+      )
+      .returning();
+
+    if (!claimed) continue;
+
     if (seq.currentStep >= MAX_STEPS) {
       await db
         .update(leadSequencesTable)
-        .set({ cancelled: true, nextSendAt: null })
+        .set({ cancelled: true, status: "active", claimedAt: null, nextSendAt: null, updatedAt: new Date() })
         .where(eq(leadSequencesTable.id, seq.id));
       continue;
     }
@@ -70,6 +111,16 @@ async function processSequences(): Promise<void> {
     const template = templates[0];
     if (!template) {
       logger.warn({ step: seq.currentStep, gymId }, "No template found for step");
+      await db
+        .update(leadSequencesTable)
+        .set({
+          status: "failed",
+          failureReason: `No template found for sequence step ${seq.currentStep}.`,
+          claimedAt: null,
+          nextSendAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(leadSequencesTable.id, seq.id));
       continue;
     }
 
@@ -140,6 +191,9 @@ async function processSequences(): Promise<void> {
         .update(leadSequencesTable)
         .set({
           currentStep: nextStep,
+          status: "active",
+          failureReason: null,
+          claimedAt: null,
           nextSendAt,
           updatedAt: new Date(),
         })
@@ -148,6 +202,16 @@ async function processSequences(): Promise<void> {
       logger.info({ leadId: lead.id, step: seq.currentStep }, "Sequence step sent");
     } catch (err) {
       logger.error({ err, leadId: lead.id, step: seq.currentStep }, "Error processing sequence step");
+      await db
+        .update(leadSequencesTable)
+        .set({
+          status: "failed",
+          failureReason: err instanceof Error ? err.message : String(err),
+          claimedAt: null,
+          nextSendAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(leadSequencesTable.id, seq.id));
     }
   }
 }

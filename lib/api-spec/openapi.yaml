@@ -1077,6 +1077,16 @@ components:
           type: boolean
         cancelled:
           type: boolean
+        status:
+          type: string
+          enum: [active, processing, failed]
+        failureReason:
+          type: string
+          nullable: true
+        claimedAt:
+          type: string
+          format: date-time
+          nullable: true
         nextSendAt:
           type: string
           nullable: true

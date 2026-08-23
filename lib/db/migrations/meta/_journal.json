@@ -57,6 +57,13 @@
       "when": 1787458474609,
       "tag": "0007_damp_tombstone",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787458614849,
+      "tag": "0008_tense_wolf_cub",
+      "breakpoints": true
     }
   ]
 }

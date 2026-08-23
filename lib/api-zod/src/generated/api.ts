@@ -359,6 +359,9 @@ export const GetLeadSequenceResponse = zod.object({
   "currentStep": zod.number(),
   "paused": zod.boolean(),
   "cancelled": zod.boolean(),
+  "status": zod.enum(['active', 'processing', 'failed']).optional(),
+  "failureReason": zod.string().nullish(),
+  "claimedAt": zod.coerce.date().nullish(),
   "nextSendAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -378,6 +381,9 @@ export const PauseLeadSequenceResponse = zod.object({
   "currentStep": zod.number(),
   "paused": zod.boolean(),
   "cancelled": zod.boolean(),
+  "status": zod.enum(['active', 'processing', 'failed']).optional(),
+  "failureReason": zod.string().nullish(),
+  "claimedAt": zod.coerce.date().nullish(),
   "nextSendAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -397,6 +403,9 @@ export const ResumeLeadSequenceResponse = zod.object({
   "currentStep": zod.number(),
   "paused": zod.boolean(),
   "cancelled": zod.boolean(),
+  "status": zod.enum(['active', 'processing', 'failed']).optional(),
+  "failureReason": zod.string().nullish(),
+  "claimedAt": zod.coerce.date().nullish(),
   "nextSendAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -416,6 +425,9 @@ export const CancelLeadSequenceResponse = zod.object({
   "currentStep": zod.number(),
   "paused": zod.boolean(),
   "cancelled": zod.boolean(),
+  "status": zod.enum(['active', 'processing', 'failed']).optional(),
+  "failureReason": zod.string().nullish(),
+  "claimedAt": zod.coerce.date().nullish(),
   "nextSendAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
