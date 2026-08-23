@@ -39,10 +39,12 @@ import type {
   ErrorEnvelope,
   ErrorResponse,
   GetCurrentUser200,
+  GetDashboardActionQueueParams,
   GetInviteDetails200,
   HealthStatus,
   Lead,
   LeadEvent,
+  LeadPage,
   LeadScore,
   LeadSequence,
   LeadWithEvents,
@@ -181,9 +183,9 @@ export const getListLeadsUrl = (params?: ListLeadsParams,) => {
 /**
  * @summary List all leads
  */
-export const listLeads = async (params?: ListLeadsParams, options?: RequestInit): Promise<Lead[]> => {
+export const listLeads = async (params?: ListLeadsParams, options?: RequestInit): Promise<LeadPage> => {
 
-  return customFetch<Lead[]>(getListLeadsUrl(params),
+  return customFetch<LeadPage>(getListLeadsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -683,21 +685,28 @@ export function useGetDashboardSummary<TData = Awaited<ReturnType<typeof getDash
 
 
 
-export const getGetDashboardActionQueueUrl = () => {
+export const getGetDashboardActionQueueUrl = (params?: GetDashboardActionQueueParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/dashboard/action-queue`
+  return stringifiedParams.length > 0 ? `/api/dashboard/action-queue?${stringifiedParams}` : `/api/dashboard/action-queue`
 }
 
 /**
  * Returns up to 8 leads ranked by urgency score for staff to action today
  * @summary Get prioritized action queue for today
  */
-export const getDashboardActionQueue = async ( options?: RequestInit): Promise<ActionQueue> => {
+export const getDashboardActionQueue = async (params?: GetDashboardActionQueueParams, options?: RequestInit): Promise<ActionQueue> => {
 
-  return customFetch<ActionQueue>(getGetDashboardActionQueueUrl(),
+  return customFetch<ActionQueue>(getGetDashboardActionQueueUrl(params),
   {
     ...options,
     method: 'GET'
@@ -710,23 +719,23 @@ export const getDashboardActionQueue = async ( options?: RequestInit): Promise<A
 
 
 
-export const getGetDashboardActionQueueQueryKey = () => {
+export const getGetDashboardActionQueueQueryKey = (params?: GetDashboardActionQueueParams,) => {
     return [
-    `/api/dashboard/action-queue`
+    `/api/dashboard/action-queue`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetDashboardActionQueueQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardActionQueue>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardActionQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetDashboardActionQueueQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardActionQueue>>, TError = ErrorType<unknown>>(params?: GetDashboardActionQueueParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardActionQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetDashboardActionQueueQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardActionQueueQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardActionQueue>>> = ({ signal }) => getDashboardActionQueue({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardActionQueue>>> = ({ signal }) => getDashboardActionQueue(params, { signal, ...requestOptions });
 
 
 
@@ -744,11 +753,11 @@ export type GetDashboardActionQueueQueryError = ErrorType<unknown>
  */
 
 export function useGetDashboardActionQueue<TData = Awaited<ReturnType<typeof getDashboardActionQueue>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardActionQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: GetDashboardActionQueueParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardActionQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetDashboardActionQueueQueryOptions(options)
+  const queryOptions = getGetDashboardActionQueueQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

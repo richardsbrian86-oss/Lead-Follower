@@ -16,16 +16,18 @@ export const HealthCheckResponse = zod.object({
   "status": zod.string()
 })
 
-
 /**
  * @summary List all leads
  */
+export const listLeadsQueryLimitDefault = 25;
 export const ListLeadsQueryParams = zod.object({
   "status": zod.enum(['new', 'contacted', 'interested', 'won', 'lost']).optional(),
-  "search": zod.coerce.string().optional()
+  "search": zod.coerce.string().optional(),
+  "limit": zod.coerce.number().min(1).max(100).default(25),
+  "cursor": zod.coerce.string().optional()
 })
-
-export const ListLeadsResponseItem = zod.object({
+export const ListLeadsResponse = zod.object({
+  "items": zod.array(zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
@@ -43,8 +45,9 @@ export const ListLeadsResponseItem = zod.object({
 }).nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
+})),
+  "nextCursor": zod.string().nullable()
 })
-export const ListLeadsResponse = zod.array(ListLeadsResponseItem)
 
 
 /**
@@ -236,11 +239,11 @@ export const GetDashboardSummaryResponse = zod.object({
 }))
 })
 
-
 /**
  * Returns up to 8 leads ranked by urgency score for staff to action today
  * @summary Get prioritized action queue for today
  */
+export const getDashboardActionQueueQueryLimitDefault = 8;
 export const GetDashboardActionQueueResponse = zod.object({
   "actions": zod.array(zod.object({
   "leadId": zod.number(),
@@ -254,7 +257,8 @@ export const GetDashboardActionQueueResponse = zod.object({
   "secondaryReasons": zod.array(zod.string()),
   "daysSinceContact": zod.number().nullish(),
   "sequenceStepDue": zod.number().nullish()
-}))
+})),
+  "nextCursor": zod.string().nullable()
 })
 
 
@@ -675,3 +679,11 @@ export const GetInviteDetailsResponse = zod.object({
 })
 
 
+export const listLeadsQueryLimitMax = 100;
+
+export const getDashboardActionQueueQueryLimitMax = 50;
+
+export const GetDashboardActionQueueQueryParams = zod.object({
+  "limit": zod.coerce.number().min(1).max(getDashboardActionQueueQueryLimitMax).default(getDashboardActionQueueQueryLimitDefault),
+  "cursor": zod.coerce.string().optional()
+})

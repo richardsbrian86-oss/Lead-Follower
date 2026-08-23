@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useListLeads, getListLeadsQueryKey, LeadStatus } from "@workspace/api-client-react";
+import type { Lead } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { Search, Filter, Phone, Mail, Clock, Eye, ArrowUpDown } from "lucide-react";
@@ -33,23 +34,38 @@ export default function LeadsList() {
   const debouncedSearch = useDebounce(search, 300);
   const [statusFilter, setStatusFilter] = useState<LeadStatus | "all">("all");
   const [scoreSort, setScoreSort] = useState<SortDir>("desc");
+  const [cursor, setCursor] = useState<string>();
+  const [loadedLeads, setLoadedLeads] = useState<Lead[]>([]);
 
   const queryParams = {
     ...(debouncedSearch ? { search: debouncedSearch } : {}),
     ...(statusFilter !== "all" ? { status: statusFilter } : {}),
+    limit: 25,
+    ...(cursor ? { cursor } : {}),
   };
 
-  const { data: rawLeads, isLoading } = useListLeads(queryParams, {
+  const { data, isLoading, isFetching } = useListLeads(queryParams, {
     query: {
       queryKey: getListLeadsQueryKey(queryParams)
     }
   });
 
-  const leads = rawLeads
-    ? [...rawLeads].sort((a, b) =>
+  useEffect(() => {
+    if (data) {
+      setLoadedLeads((previous) => cursor ? [...previous, ...data.items] : data.items);
+    }
+  }, [data, cursor]);
+
+  useEffect(() => {
+    setCursor(undefined);
+    setLoadedLeads([]);
+  }, [debouncedSearch, statusFilter]);
+
+  const leads = loadedLeads
+    ? [...loadedLeads].sort((a, b) =>
         scoreSort === "desc" ? (b.score ?? 0) - (a.score ?? 0) : (a.score ?? 0) - (b.score ?? 0)
       )
-    : rawLeads;
+    : loadedLeads;
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -173,6 +189,17 @@ export default function LeadsList() {
               )}
             </TableBody>
           </Table>
+          {data?.nextCursor && (
+            <div className="flex justify-center border-t p-4">
+              <Button
+                variant="outline"
+                onClick={() => setCursor(data?.nextCursor ?? undefined)}
+                disabled={isFetching}
+              >
+                {isFetching ? "Loading..." : "Load more leads"}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

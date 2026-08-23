@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, varchar, timestamp, pgEnum, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, varchar, timestamp, pgEnum, jsonb, index } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { gymsTable } from "./gyms.js";
@@ -28,7 +28,10 @@ export const leadsTable = pgTable("leads", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+}, (table) => [
+  index("leads_gym_created_at_idx").on(table.gymId, table.createdAt),
+  index("leads_gym_status_created_at_idx").on(table.gymId, table.status, table.createdAt),
+]);
 
 export const leadEventsTable = pgTable("lead_events", {
   id: serial("id").primaryKey(),
@@ -40,7 +43,9 @@ export const leadEventsTable = pgTable("lead_events", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+}, (table) => [
+  index("lead_events_lead_created_at_idx").on(table.leadId, table.createdAt),
+]);
 
 export const insertLeadSchema = createInsertSchema(leadsTable, {
   email: z.email(),

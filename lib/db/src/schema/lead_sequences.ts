@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, boolean, timestamp, varchar, text, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, boolean, timestamp, varchar, text, pgEnum, index } from "drizzle-orm/pg-core";
 import { leadsTable } from "./leads.js";
 import { gymsTable } from "./gyms.js";
 
@@ -20,7 +20,11 @@ export const leadSequencesTable = pgTable("lead_sequences", {
   nextSendAt: timestamp("next_send_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  index("lead_sequences_gym_active_next_send_idx").on(
+    table.gymId, table.paused, table.cancelled, table.nextSendAt,
+  ),
+]);
 
 export type LeadSequence = typeof leadSequencesTable.$inferSelect;
 export type InsertLeadSequence = typeof leadSequencesTable.$inferInsert;

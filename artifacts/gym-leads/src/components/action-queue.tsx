@@ -150,7 +150,7 @@ export function ActionQueue() {
   const createEvent = useCreateLeadEvent();
   const { dismissed, dismiss } = useDismissedLeads();
 
-  const { data, isLoading, isError, dataUpdatedAt, refetch } = useGetDashboardActionQueue({
+  const { data, isLoading, isError, dataUpdatedAt, refetch } = useGetDashboardActionQueue(undefined, {
     query: {
       queryKey: getGetDashboardActionQueueQueryKey(),
       refetchInterval: 60_000,

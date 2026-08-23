@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, ilike, or, and, desc, count, sql, notInArray } from "drizzle-orm";
+import { eq, ilike, or, and, desc, count, sql, notInArray, lt } from "drizzle-orm";
 import { db, leadsTable, leadEventsTable, leadSequencesTable } from "@workspace/db";
 import { createSequenceForLead } from "../lib/scheduler.js";
 import { recomputeAndSaveScore, computeScore } from "../lib/scorer.js";
@@ -45,6 +45,24 @@ function serializeEvent(event: DbEvent) {
   };
 }
 
+function encodeCursor(value: string) {
+  return Buffer.from(value).toString("base64url");
+}
+
+function decodeCursor(value: string | undefined) {
+  if (!value) return null;
+  try {
+    const decoded = Buffer.from(value, "base64url").toString("utf8");
+    const [createdAt, id] = decoded.split("|");
+    const parsedId = Number(id);
+    if (!createdAt || !Number.isInteger(parsedId)) return null;
+    const date = new Date(createdAt);
+    return Number.isNaN(date.getTime()) ? null : { createdAt: date, id: parsedId };
+  } catch {
+    return null;
+  }
+}
+
 router.get("/leads", async (req, res): Promise<void> => {
   const query = ListLeadsQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -52,7 +70,7 @@ router.get("/leads", async (req, res): Promise<void> => {
     return;
   }
 
-  const { status, search } = query.data;
+  const { status, search, limit = 25, cursor } = query.data;
   const gymId = req.dbUser!.gymId!;
 
   const conditions = [eq(leadsTable.gymId, gymId)];
@@ -67,14 +85,36 @@ router.get("/leads", async (req, res): Promise<void> => {
       )!,
     );
   }
+  const decodedCursor = decodeCursor(cursor);
+  if (cursor && !decodedCursor) {
+    res.status(400).json({ error: "Invalid cursor" });
+    return;
+  }
+  if (decodedCursor) {
+    conditions.push(
+      or(
+        lt(leadsTable.createdAt, decodedCursor.createdAt),
+        and(eq(leadsTable.createdAt, decodedCursor.createdAt), lt(leadsTable.id, decodedCursor.id)),
+      )!,
+    );
+  }
 
   const leads = await db
     .select()
     .from(leadsTable)
     .where(and(...conditions))
-    .orderBy(desc(leadsTable.createdAt));
+    .orderBy(desc(leadsTable.createdAt), desc(leadsTable.id))
+    .limit(limit + 1);
 
-  res.json(ListLeadsResponse.parse(leads.map(serializeLead)));
+  const hasMore = leads.length > limit;
+  const page = hasMore ? leads.slice(0, limit) : leads;
+  const last = page.at(-1);
+  res.json({
+    items: ListLeadsResponse.parse(page.map(serializeLead)),
+    nextCursor: hasMore && last
+      ? encodeCursor(`${new Date(last.createdAt).toISOString()}|${last.id}`)
+      : null,
+  });
 });
 
 router.post("/leads", async (req, res): Promise<void> => {
@@ -357,6 +397,13 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
 });
 
 router.get("/dashboard/action-queue", async (req, res): Promise<void> => {
+  const rawLimit = Number(req.query.limit ?? 8);
+  const limit = Number.isInteger(rawLimit) ? Math.min(Math.max(rawLimit, 1), 50) : 8;
+  const cursor = req.query.cursor ? Number(req.query.cursor) : 0;
+  if (!Number.isInteger(cursor) || cursor < 0) {
+    res.status(400).json({ error: "Invalid cursor" });
+    return;
+  }
   const gymId = req.dbUser!.gymId!;
   const now = new Date();
   const followUpThreshold = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
@@ -381,6 +428,7 @@ router.get("/dashboard/action-queue", async (req, res): Promise<void> => {
       and(
         eq(leadSequencesTable.paused, false),
         eq(leadSequencesTable.cancelled, false),
+        eq(leadSequencesTable.gymId, gymId),
       ),
     );
 
@@ -392,6 +440,8 @@ router.get("/dashboard/action-queue", async (req, res): Promise<void> => {
       latestAt: sql<Date>`MAX(${leadEventsTable.createdAt})`,
     })
     .from(leadEventsTable)
+    .innerJoin(leadsTable, eq(leadEventsTable.leadId, leadsTable.id))
+    .where(eq(leadsTable.gymId, gymId))
     .groupBy(leadEventsTable.leadId);
 
   const lastEventByLeadId = new Map(recentEventRows.map((r) => [r.leadId, new Date(r.latestAt)]));
@@ -483,9 +533,10 @@ router.get("/dashboard/action-queue", async (req, res): Promise<void> => {
   }
 
   entries.sort((a, b) => b.urgencyScore - a.urgencyScore);
-  const top8 = entries.slice(0, 8);
+  const page = entries.slice(cursor, cursor + limit);
+  const nextCursor = cursor + limit < entries.length ? String(cursor + limit) : null;
 
-  res.json(GetDashboardActionQueueResponse.parse({ actions: top8 }));
+  res.json(GetDashboardActionQueueResponse.parse({ actions: page, nextCursor }));
 });
 
 export default router;

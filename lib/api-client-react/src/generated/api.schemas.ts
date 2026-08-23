@@ -47,6 +47,10 @@ export interface Lead {
   updatedAt: string;
 }
 
+export interface LeadPage {
+  items: Lead[];
+  nextCursor: string | null;
+}
 export interface LeadEvent {
   id: number;
   leadId: number;
@@ -224,6 +228,7 @@ export interface ActionItem {
 
 export interface ActionQueue {
   actions: ActionItem[];
+  nextCursor: string | null;
 }
 
 export interface AnalyticsInsightsInput {
@@ -350,8 +355,22 @@ export interface ErrorEnvelope {
 export type ListLeadsParams = {
 status?: LeadStatus;
 search?: string;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+cursor?: string;
 };
 
+export type GetDashboardActionQueueParams = {
+/**
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: number;
+cursor?: string;
+};
 export type GetCurrentUser200 = {
   user?: AuthUser;
 };
@@ -373,4 +392,3 @@ export type GetInviteDetails200 = {
   email: string;
   gymName: string;
 };
-

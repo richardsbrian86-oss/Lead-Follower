@@ -102,14 +102,16 @@ export default function LeadsScreen() {
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  const { data: leads, isLoading, refetch } = useListLeads(
+  const { data, isLoading, refetch } = useListLeads(
     statusFilter !== "all" || search
       ? {
           ...(statusFilter !== "all" ? { status: statusFilter } : {}),
           ...(search ? { search } : {}),
+          limit: 25,
         }
-      : undefined,
+      : { limit: 25 },
   );
+  const leads = data?.items;
 
   const renderItem = useCallback(({ item }: { item: Lead }) => (
     <LeadCard lead={item} />
