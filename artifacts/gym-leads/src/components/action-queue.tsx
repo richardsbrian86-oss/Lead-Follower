@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetDashboardActionQueue,
@@ -149,13 +149,14 @@ export function ActionQueue() {
   const [showDismissed, setShowDismissed] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [markingIds, setMarkingIds] = useState<Set<number>>(new Set());
+  const [freshnessNow, setFreshnessNow] = useState(() => Date.now());
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const updateLead = useUpdateLead();
   const createEvent = useCreateLeadEvent();
   const { dismissed, dismiss, undoDismiss } = useDismissedLeads();
 
-  const { data, isLoading, isError, dataUpdatedAt, refetch } = useGetDashboardActionQueue(undefined, {
+  const { data, isLoading, isError, dataUpdatedAt, refetch } = useGetDashboardActionQueue({
     query: {
       queryKey: getGetDashboardActionQueueQueryKey(),
       refetchInterval: 60_000,
@@ -167,6 +168,20 @@ export function ActionQueue() {
   const dismissedActions = allActions.filter((a) => dismissed.has(a.leadId));
   const count = actions.length;
   const hasStaleData = isError && data !== undefined;
+  const isDataOutdated = dataUpdatedAt > 0 && freshnessNow - dataUpdatedAt > 5 * 60_000;
+
+  useEffect(() => {
+    if (dataUpdatedAt === 0) return;
+
+    const remaining = dataUpdatedAt + 5 * 60_000 - Date.now();
+    if (remaining <= 0) {
+      setFreshnessNow(Date.now());
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setFreshnessNow(Date.now()), remaining);
+    return () => window.clearTimeout(timeout);
+  }, [dataUpdatedAt]);
 
   async function handleRetry() {
     setIsRetrying(true);
@@ -273,6 +288,16 @@ export function ActionQueue() {
             >
               {count}
             </Badge>
+          )}
+          {isDataOutdated && (
+            <span
+              className="ml-1 inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-400"
+              role="status"
+              data-testid="action-queue-outdated-banner"
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              Data may be outdated
+            </span>
           )}
         </CardTitle>
         {count > 0 && (
