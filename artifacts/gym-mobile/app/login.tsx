@@ -21,7 +21,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { useSignIn, useSignUp } from "@clerk/expo";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 
 type AuthView = "sign-in" | "sign-up" | "verify-email";
@@ -29,7 +29,15 @@ type AuthView = "sign-in" | "sign-up" | "verify-email";
 export default function LoginScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [view, setView] = useState<AuthView>("sign-in");
+  // Arriving from the accept-invite screen pre-selects the right form and
+  // pre-fills the invited email address (mirrors the web app's behavior of
+  // pre-filling the sign-up/sign-in form from an invite link).
+  const { inviteEmail, mode } = useLocalSearchParams<{
+    inviteEmail?: string;
+    mode?: string;
+  }>();
+  const initialEmail = typeof inviteEmail === "string" ? inviteEmail : "";
+  const [view, setView] = useState<AuthView>(mode === "sign-up" ? "sign-up" : "sign-in");
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
@@ -67,11 +75,16 @@ export default function LoginScreen() {
 
           <View style={styles.formContainer}>
             {view === "sign-in" && (
-              <SignInForm colors={colors} onSignUp={() => setView("sign-up")} />
+              <SignInForm
+                colors={colors}
+                initialEmail={initialEmail}
+                onSignUp={() => setView("sign-up")}
+              />
             )}
             {view === "sign-up" && (
               <SignUpForm
                 colors={colors}
+                initialEmail={initialEmail}
                 onSignIn={() => setView("sign-in")}
                 onVerify={() => setView("verify-email")}
               />
@@ -91,14 +104,16 @@ export default function LoginScreen() {
 
 function SignInForm({
   colors,
+  initialEmail = "",
   onSignUp,
 }: {
   colors: ReturnType<typeof useColors>;
+  initialEmail?: string;
   onSignUp: () => void;
 }) {
   const { signIn, fetchStatus } = useSignIn();
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
@@ -207,15 +222,17 @@ function SignInForm({
 
 function SignUpForm({
   colors,
+  initialEmail = "",
   onSignIn,
   onVerify,
 }: {
   colors: ReturnType<typeof useColors>;
+  initialEmail?: string;
   onSignIn: () => void;
   onVerify: () => void;
 }) {
   const { signUp, fetchStatus } = useSignUp();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
