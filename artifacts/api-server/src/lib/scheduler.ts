@@ -130,62 +130,85 @@ async function processSequences(): Promise<void> {
         ? await getNextSendAt(nextStep, lead.visitDate, gymId)
         : null;
 
-      // Generate and send email
-      const emailDraft = await generateMessage({
-        leadName: lead.name,
-        visitDate: new Date(lead.visitDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
-        channel: "email",
-        stepNumber: seq.currentStep,
-        toneInstruction: template.toneInstruction,
+      const existingMessages = await db
+        .select({
+          channel: outboundMessagesTable.channel,
+          status: outboundMessagesTable.status,
+        })
+        .from(outboundMessagesTable)
+        .where(
+          and(
+            eq(outboundMessagesTable.leadId, lead.id),
+            eq(outboundMessagesTable.sequenceStep, seq.currentStep),
+          ),
+        );
+      const hasUncertainOrDeliveredMessage = (channel: "email" | "sms") =>
+        existingMessages.some(
+          (message) =>
+            message.channel === channel && (message.status === "sent" || message.status === "pending"),
+        );
+      const visitDate = new Date(lead.visitDate).toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
       });
 
-      const [emailMsg] = await db
-        .insert(outboundMessagesTable)
-        .values({
-          leadId: lead.id,
-          gymId,
+      // Existing sent/pending records are deliberately not retried: pending means
+      // the provider may have accepted the message before the process stopped.
+      if (!hasUncertainOrDeliveredMessage("email")) {
+        const emailDraft = await generateMessage({
+          leadName: lead.name,
+          visitDate,
           channel: "email",
-          subject: emailDraft.subject,
+          stepNumber: seq.currentStep,
+          toneInstruction: template.toneInstruction,
+        });
+        const [emailMsg] = await db
+          .insert(outboundMessagesTable)
+          .values({
+            leadId: lead.id,
+            gymId,
+            channel: "email",
+            subject: emailDraft.subject,
+            body: emailDraft.body,
+            status: "pending",
+            sequenceStep: seq.currentStep,
+          })
+          .returning();
+        await sendEmail({
+          messageId: emailMsg.id,
+          toEmail: lead.email,
+          subject: emailDraft.subject ?? "Following up from Flow State",
           body: emailDraft.body,
-          status: "pending",
-          sequenceStep: seq.currentStep,
-        })
-        .returning();
+        });
+      }
 
-      await sendEmail({
-        messageId: emailMsg.id,
-        toEmail: lead.email,
-        subject: emailDraft.subject ?? "Following up from Flow State",
-        body: emailDraft.body,
-      });
-
-      // Generate and send SMS
-      const smsDraft = await generateMessage({
-        leadName: lead.name,
-        visitDate: new Date(lead.visitDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
-        channel: "sms",
-        stepNumber: seq.currentStep,
-        toneInstruction: template.toneInstruction,
-      });
-
-      const [smsMsg] = await db
-        .insert(outboundMessagesTable)
-        .values({
-          leadId: lead.id,
-          gymId,
+      if (!hasUncertainOrDeliveredMessage("sms")) {
+        const smsDraft = await generateMessage({
+          leadName: lead.name,
+          visitDate,
           channel: "sms",
-          subject: null,
+          stepNumber: seq.currentStep,
+          toneInstruction: template.toneInstruction,
+        });
+        const [smsMsg] = await db
+          .insert(outboundMessagesTable)
+          .values({
+            leadId: lead.id,
+            gymId,
+            channel: "sms",
+            subject: null,
+            body: smsDraft.body,
+            status: "pending",
+            sequenceStep: seq.currentStep,
+          })
+          .returning();
+        await sendSms({
+          messageId: smsMsg.id,
+          toPhone: lead.phone,
           body: smsDraft.body,
-          status: "pending",
-          sequenceStep: seq.currentStep,
-        })
-        .returning();
-
-      await sendSms({
-        messageId: smsMsg.id,
-        toPhone: lead.phone,
-        body: smsDraft.body,
-      });
+        });
+      }
 
       await db
         .update(leadSequencesTable)

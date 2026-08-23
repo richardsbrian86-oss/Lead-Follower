@@ -8,6 +8,8 @@ import {
   PauseLeadSequenceResponse,
   ResumeLeadSequenceParams,
   ResumeLeadSequenceResponse,
+  RetryLeadSequenceParams,
+  RetryLeadSequenceResponse,
   CancelLeadSequenceParams,
   CancelLeadSequenceResponse,
   ListSequenceTemplatesResponse,
@@ -134,6 +136,51 @@ router.post("/leads/:id/sequence/resume", async (req, res): Promise<void> => {
     .returning();
 
   res.json(ResumeLeadSequenceResponse.parse(serializeSeq(updated)));
+});
+
+router.post("/leads/:id/sequence/retry", async (req, res): Promise<void> => {
+  const params = RetryLeadSequenceParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const gymId = req.dbUser!.gymId!;
+  if (!(await requireLeadOwnership(params.data.id, gymId))) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(leadSequencesTable)
+    .set({
+      status: "active",
+      failureReason: null,
+      claimedAt: null,
+      nextSendAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(leadSequencesTable.leadId, params.data.id),
+        eq(leadSequencesTable.gymId, gymId),
+        eq(leadSequencesTable.status, "failed"),
+      ),
+    )
+    .returning();
+
+  if (!updated) {
+    const [sequence] = await db
+      .select({ id: leadSequencesTable.id })
+      .from(leadSequencesTable)
+      .where(and(eq(leadSequencesTable.leadId, params.data.id), eq(leadSequencesTable.gymId, gymId)));
+    res.status(sequence ? 409 : 404).json({
+      error: sequence ? "Only failed sequences can be retried" : "Sequence not found for this lead",
+    });
+    return;
+  }
+
+  res.json(RetryLeadSequenceResponse.parse(serializeSeq(updated)));
 });
 
 router.post("/leads/:id/sequence/cancel", async (req, res): Promise<void> => {

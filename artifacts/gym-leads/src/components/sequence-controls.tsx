@@ -4,6 +4,7 @@ import {
   getGetLeadSequenceQueryKey,
   usePauseLeadSequence,
   useResumeLeadSequence,
+  useRetryLeadSequence,
   useCancelLeadSequence,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -11,7 +12,7 @@ import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Play, Pause, X, CalendarClock, Loader2 } from "lucide-react";
+import { Play, Pause, X, CalendarClock, Loader2, AlertTriangle, RotateCcw } from "lucide-react";
 
 interface SequenceControlsProps {
   leadId: number;
@@ -32,6 +33,7 @@ export function SequenceControls({ leadId }: SequenceControlsProps) {
 
   const pause = usePauseLeadSequence();
   const resume = useResumeLeadSequence();
+  const retry = useRetryLeadSequence();
   const cancel = useCancelLeadSequence();
 
   if (isLoading) {
@@ -44,13 +46,17 @@ export function SequenceControls({ leadId }: SequenceControlsProps) {
     );
   }
 
-  const statusColor = sequence.cancelled
+  const statusColor = sequence.status === "failed"
+    ? "bg-red-100 text-red-700"
+    : sequence.cancelled
     ? "bg-muted text-muted-foreground"
     : sequence.paused
       ? "bg-amber-100 text-amber-700"
       : "bg-emerald-100 text-emerald-700";
 
-  const statusLabel = sequence.cancelled
+  const statusLabel = sequence.status === "failed"
+    ? "Needs attention"
+    : sequence.cancelled
     ? "Cancelled"
     : sequence.paused
       ? "Paused"
@@ -66,13 +72,46 @@ export function SequenceControls({ leadId }: SequenceControlsProps) {
         <Badge className={`text-xs font-medium border-0 ${statusColor}`}>{statusLabel}</Badge>
       </div>
 
+      {sequence.status === "failed" && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-semibold">Follow-up could not be completed</p>
+              <p className="mt-1">{sequence.failureReason || "The scheduler stopped before this step finished."}</p>
+              <p className="mt-2 text-red-700">Retry resumes at step {sequence.currentStep + 1}. Messages already sent or in progress will not be duplicated.</p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            className="mt-3 w-full"
+            disabled={retry.isPending}
+            onClick={() =>
+              retry.mutate(
+                { id: leadId },
+                {
+                  onSuccess: () => {
+                    invalidate();
+                    toast({ title: "Follow-up queued", description: `Step ${sequence.currentStep + 1} will resume without duplicating sent messages.` });
+                  },
+                  onError: () => toast({ title: "Error", description: "Could not retry the follow-up.", variant: "destructive" }),
+                },
+              )
+            }
+          >
+            {retry.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="mr-1.5 h-3.5 w-3.5" />}
+            Retry follow-up
+          </Button>
+        </div>
+      )}
+
       {!sequence.cancelled && sequence.nextSendAt && !sequence.paused && (
         <p className="text-xs text-muted-foreground">
           Next message: {format(new Date(sequence.nextSendAt), "PPP")}
         </p>
       )}
 
-      {!sequence.cancelled && (
+      {!sequence.cancelled && sequence.status !== "failed" && (
         <div className="flex gap-2">
           {sequence.paused ? (
             <Button

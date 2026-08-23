@@ -415,7 +415,12 @@ export const ResumeLeadSequenceResponse = zod.object({
   "updatedAt": zod.string()
 })
 
-
+/**
+ * @summary Retry a failed follow-up sequence from its affected step
+ */
+export const RetryLeadSequenceParams = zod.object({
+  "id": zod.coerce.number()
+})
 /**
  * @summary Cancel the follow-up sequence for a lead
  */
@@ -686,4 +691,18 @@ export const getDashboardActionQueueQueryLimitMax = 50;
 export const GetDashboardActionQueueQueryParams = zod.object({
   "limit": zod.coerce.number().min(1).max(getDashboardActionQueueQueryLimitMax).default(getDashboardActionQueueQueryLimitDefault),
   "cursor": zod.coerce.string().optional()
+})
+
+export const RetryLeadSequenceResponse = zod.object({
+  "id": zod.number(),
+  "leadId": zod.number(),
+  "currentStep": zod.number(),
+  "paused": zod.boolean(),
+  "cancelled": zod.boolean(),
+  "status": zod.enum(['active', 'processing', 'failed']).optional(),
+  "failureReason": zod.string().nullish(),
+  "claimedAt": zod.coerce.date().nullish(),
+  "nextSendAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
 })

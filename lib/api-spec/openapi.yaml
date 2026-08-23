@@ -415,6 +415,37 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /leads/{id}/sequence/retry:
+    post:
+      operationId: retryLeadSequence
+      tags: [sequences]
+      summary: Retry a failed follow-up sequence from its affected step
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Retried sequence
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadSequence"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Sequence is not failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /leads/{id}/sequence/cancel:
     post:
       operationId: cancelLeadSequence
