@@ -2,6 +2,10 @@
 
 A Gym Lead CRM for tracking leads, managing staff, and running automated follow-up sequences. Gym owners manage their pipeline from a web dashboard; staff can also act on leads via a mobile app.
 
+## About
+
+Flow State CRM helps gyms organize lead capture, follow-up, and team workflows in one place. It centralizes lead tracking, outreach automation, staff activity, and performance analytics so owners can respond faster and convert more prospects.
+
 ## Run & Operate
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port $PORT)
@@ -49,7 +53,7 @@ Authentication uses **Clerk** (Replit-managed). Session cookies are used on web;
 - **Clerk proxy**: all Clerk API traffic is proxied through `/api/__clerk` on the Express server in production (handled by `clerkProxyMiddleware`).
 - **No req.user**: the old `req.user` / `req.isAuthenticated()` pattern is gone. Use `req.dbUser` (set by `requireAuth` middleware) throughout route handlers.
 - **Web = cookies, mobile = bearer tokens**: web uses Clerk session cookies; the Expo mobile app uses `setAuthTokenGetter(() => getToken())` to attach bearer tokens.
-- **Invites are email-based**: an invite is a pending DB row for an email. When the invitee signs up with Clerk and first hits a protected endpoint, JIT provisioning matches the email, assigns the gym, and marks the invite accepted.
+- **Invites are email-based**: an invite is a pending DB row for an email. When the invitee signs up with Clerk and first hits a protected endpoint, JIT provisioning matches the email, assigns the gym, and activates access.
 
 ## Product
 
@@ -61,12 +65,12 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Invite links opening the app (Universal / App Links)
 
-The staff invite email links to `https://lead-follower-richardsbrian86.replit.app/accept-invite?token=...` (built in `artifacts/api-server/src/lib/email.ts`). Two mechanisms make this open the mobile app instead of just the web page:
+The staff invite email links to `https://lead-follower-richardsbrian86.replit.app/accept-invite?token=...` (built in `artifacts/api-server/src/lib/email.ts`). Two mechanisms make this open the mobile app instead of only the browser:
 
 - **Custom scheme** (`gym-mobile://accept-invite?token=...`) — already works today for anyone with the app installed who taps that exact link.
 - **Universal Link / App Link** (the real `https://` link people actually get by email) — wired up, but needs two values only available once the app goes through a real store submission:
-  - `artifacts/gym-leads/public/.well-known/apple-app-site-association` needs its `appID` changed from `REPLACE_WITH_APPLE_TEAM_ID.com.flowstatecrm.mobile` to `<real Apple Team ID>.com.flowstatecrm.mobile`. The Team ID shows up when you sign in with your Apple Developer account during Replit's **Expo Launch** flow (Publishing tool → "Start publishing to the App Store").
-  - `artifacts/gym-leads/public/.well-known/assetlinks.json` needs its `sha256_cert_fingerprints` filled in with the real Android signing certificate fingerprint. Replit does not currently support Android/Google Play publishing, so this can't be completed through Replit — it would require building/signing the Android app elsewhere.
+  - `artifacts/gym-leads/public/.well-known/apple-app-site-association` needs its `appID` changed from `REPLACE_WITH_APPLE_TEAM_ID.com.flowstatecrm.mobile` to `<real Apple Team ID>.com.flowstatecrm.mobile`.
+  - `artifacts/gym-leads/public/.well-known/assetlinks.json` needs its `sha256_cert_fingerprints` filled in with the real Android signing certificate fingerprint. Replit does not currently support verifying the final production signing key from local development.
   - Once the AASA file has the real Team ID, publish a new build via Expo Launch and test the emailed link on a real device (Universal Links cannot be verified in Expo Go or the dev sandbox).
 - `getAppUrl()` (`artifacts/api-server/src/routes/invites.ts`) prefers the `APP_URL` production env var (set in `artifacts/api-server/.replit-artifact/artifact.toml` to the deployed domain) over per-request header detection, so the emailed link's domain always matches what's registered in `app.json` (`ios.associatedDomains` / `android.intentFilters`) and the `.well-known` files above. If a custom domain is ever added, update all three places together.
 
